@@ -5,3 +5,5 @@ authors = ["louis <louis.roc@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+GSL = '>=1.1.0'
+jack = '>=0.6'
