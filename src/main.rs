@@ -1,7 +1,18 @@
+#![feature(drain_filter)]
 extern crate jack;
+extern crate itertools;
 use std::io;
+use std::vec;
 use std::result::Result;
 use std::result::Result::Ok;
+use std::sync::mpsc::channel;
+use std::sync::mpsc::Receiver;
+use std::thread;
+use rustfft::FFTplanner;
+use rustfft::num_complex::Complex;
+use itertools::Itertools;
+
+
 
 fn main() -> Result<(), jack::Error> {
     let (client, _status):(jack::Client, jack::ClientStatus) = jack::Client::new("rasta", jack::ClientOptions::NO_START_SERVER)?;
@@ -9,18 +20,17 @@ fn main() -> Result<(), jack::Error> {
     // register ports
     let in_b = client
         .register_port("guitar_in", jack::AudioIn::default())?;
-    let mut out_a = client
-        .register_port("rasta_out_l", jack::AudioOut::default())?;
-    let mut out_b = client
-        .register_port("rasta_out_r", jack::AudioOut::default())?;
 
+    let (sender, receiver) = channel::<Vec<f32>>();
+
+    thread::spawn(move || {fourrier_thread(receiver)});
+
+    //start the rasta callback on the default audio input
     let process_callback = move |_: &jack::Client, ps: &jack::ProcessScope| -> jack::Control {
-        let out_a_p = out_a.as_mut_slice(ps);
-        let out_b_p = out_b.as_mut_slice(ps);
         let in_b_p = in_b.as_slice(ps);
-        out_a_p.clone_from_slice(&in_b_p);
-        out_b_p.clone_from_slice(&in_b_p);
-        println!("writing {}", out_a_p.iter().fold(0f32, |a, b| a + b));
+        
+        sender.send(in_b_p.to_vec()).unwrap();
+
         jack::Control::Continue
     };
     let process = jack::ClosureProcessHandler::new(process_callback);
@@ -34,4 +44,64 @@ fn main() -> Result<(), jack::Error> {
     active_client.deactivate()?;
 
     Ok(())
+}
+
+fn fourrier_thread(receiver:Receiver<Vec<f32>>)
+{
+    let mut planner = FFTplanner::<f32>::new(false);
+
+    let mut queue = std::collections::VecDeque::new();
+    loop
+    {
+        //aggregate all pending input
+        for input in receiver.try_iter()
+        {
+            queue.push_front(input);
+        }
+        //if not enough input was aggregated, wait and try again
+        if queue.len() < 32
+        {
+            queue.push_front(receiver.recv().unwrap());
+            continue;
+        }
+        //if too much input was aggregated, get rid of the oldest
+        queue.truncate(32);
+        //aggregate input, oldest first
+        let mut vec:Vec<f32> = vec!();
+        for input in queue.iter().rev()
+        {
+            vec.extend(input);
+        }
+        //apply fft and extract frequencies
+        fourrier_analysis(&vec[..], &mut planner);
+    }
+}
+
+fn fourrier_analysis(vec:&[f32], planner:&mut FFTplanner<f32>)
+{
+    //setup fft parameters
+    let len = vec.len();
+    let mut fft_in = vec.iter().map(|f| Complex{re:*f, im:0f32}).collect_vec();
+    let mut fft_out = vec![Complex::default(); len];
+    let fft = planner.plan_fft(len);
+    
+    //process fft
+    fft.process(&mut fft_in, &mut fft_out);
+
+    //map results to frequencies and intensity
+    for (Complex{re:a, im:b}, i) in fft_out.iter_mut().take(len / 2).zip(0..)
+    {
+        *b = *a * *a + *b * *b;
+        *a = i as f32 * 44100f32 / len as f32;
+    }
+
+    //sort by intensity
+    fft_out.sort_by(|b, a| a.im.partial_cmp(&b.im).unwrap());
+
+    //print 9 most intense frequencies
+    for &Complex{re:a, im:b} in fft_out.iter().take(9)
+    {
+        print!("{:^5.0}:{:^6.2} ", a, b);
+    }
+    println!("");
 }
