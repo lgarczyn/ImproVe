@@ -88,11 +88,14 @@ fn fourrier_analysis(vec:&[f32], planner:&mut FFTplanner<f32>)
     //process fft
     fft.process(&mut fft_in, &mut fft_out);
 
+    //discard useless data
+    fft_out.truncate(len / 2);
     //map results to frequencies and intensity
-    for (Complex{re:a, im:b}, i) in fft_out.iter_mut().take(len / 2).zip(0..)
+    for (Complex{re:a, im:b}, i) in fft_out.iter_mut().zip(0..)
     {
-        *b = *a * *a + *b * *b;
+        *b = (*a * *a + *b * *b).sqrt();
         *a = i as f32 * 44100f32 / len as f32;
+        *b *= a_weigh_frequency(*a);
     }
 
     //sort by intensity
@@ -104,4 +107,19 @@ fn fourrier_analysis(vec:&[f32], planner:&mut FFTplanner<f32>)
         print!("{:^5.0}:{:^6.2} ", a, b);
     }
     println!("");
+}
+
+// https://fr.mathworks.com/matlabcentral/fileexchange/46819-a-weighting-filter-with-matlab
+// reduce frequency intensity based on human perception
+fn a_weigh_frequency(freq:f32) -> f32
+{
+    let c1 = 12194.217f32.powi(2);
+    let c2 = 20.598997f32.powi(2);
+    let c3 = 107.65265f32.powi(2);
+    let c4 = 737.86223f32.powi(2);
+    // evaluate the A-weighting filter in the frequency domain
+    let freq = freq.powi(2);
+    let num = c1*(freq.powi(2));
+    let den = (freq+c2) * ((freq+c3)*(freq+c4)).sqrt() * (freq+c1);
+    1.2589f32 * num / den
 }

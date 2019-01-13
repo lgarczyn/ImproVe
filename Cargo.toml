@@ -8,4 +8,4 @@ edition = "2018"
 rustfft = '>=3.0.0'
 jack = '>=0.6'
 splines = '>=0.2.3'
-itertools = '0.8.0'
+itertools = '>=0.8.0'
