@@ -23,8 +23,6 @@ fn main() -> Result<(), jack::Error> {
 
     let (sender, receiver) = channel::<Vec<f32>>();
 
-    thread::spawn(move || {fourrier_thread(receiver)});
-
     //start the rasta callback on the default audio input
     let process_callback = move |_: &jack::Client, ps: &jack::ProcessScope| -> jack::Control {
         let in_b_p = in_b.as_slice(ps);
@@ -35,6 +33,12 @@ fn main() -> Result<(), jack::Error> {
     };
     let process = jack::ClosureProcessHandler::new(process_callback);
     let active_client = client.activate_async((), process)?;
+
+    println!("Press enter/return to start reading frequencies ...");
+    let mut user_input = String::new();
+    io::stdin().read_line(&mut user_input).ok();
+
+    thread::spawn(move || {fourrier_thread(receiver)});
 
     // Wait for user input to quit
     println!("Press enter/return to quit...");
@@ -49,8 +53,28 @@ fn main() -> Result<(), jack::Error> {
 fn fourrier_thread(receiver:Receiver<Vec<f32>>)
 {
     let mut planner = FFTplanner::<f32>::new(false);
-
     let mut queue = std::collections::VecDeque::new();
+
+    /*for input in receiver.try_iter()
+    {
+        queue.push_front(input);
+    }
+    while queue.len() < 64 {
+        queue.push_front(receiver.recv().unwrap());
+    }
+    queue.truncate(64);
+    let mut vec:Vec<f32> = vec!();
+    for input in queue.iter().rev()
+    {
+        vec.extend(input);
+    }
+    let mask = fourrier_analysis(&vec[..], &mut planner, None)
+        .iter()
+        .map(|c|c.im)
+        .collect_vec();
+    queue.clear();
+    println!("Finished reading noise");*/
+
     loop
     {
         //aggregate all pending input
@@ -73,11 +97,14 @@ fn fourrier_thread(receiver:Receiver<Vec<f32>>)
             vec.extend(input);
         }
         //apply fft and extract frequencies
-        fourrier_analysis(&vec[..], &mut planner);
+        fourrier_analysis(&vec[..], &mut planner, None);// Some(&mask));
     }
 }
 
-fn fourrier_analysis(vec:&[f32], planner:&mut FFTplanner<f32>)
+fn fourrier_analysis(
+    vec:&[f32],
+    planner:&mut FFTplanner<f32>,
+    mask:Option<&Vec<f32>>) -> Vec<Complex<f32>>
 {
     //setup fft parameters
     let len = vec.len();
@@ -94,7 +121,14 @@ fn fourrier_analysis(vec:&[f32], planner:&mut FFTplanner<f32>)
     for (Complex{re:a, im:b}, i) in fft_out.iter_mut().zip(0..)
     {
         *b = (*a * *a + *b * *b).sqrt();
-        *a = i as f32 * 44100f32 / len as f32;
+        *a = i as f32 * 48000f32 / len as f32;
+        if let Some(vec) = mask {
+            if *b > vec[i] {
+                *b -= vec[i];
+            } else {
+                *b = 0f32;
+            }
+        }
         *b *= a_weigh_frequency(*a);
     }
 
@@ -107,6 +141,8 @@ fn fourrier_analysis(vec:&[f32], planner:&mut FFTplanner<f32>)
         print!("{:^5.0}:{:^6.2} ", a, b);
     }
     println!("");
+
+    fft_out
 }
 
 // https://fr.mathworks.com/matlabcentral/fileexchange/46819-a-weighting-filter-with-matlab
