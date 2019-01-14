@@ -15,7 +15,7 @@ use clampf::clamp;
 use crossterm::style;
 use crossterm::Color;
 
-
+//setup ports, and start threads
 fn main() -> Result<(), jack::Error> {
     let (client, _status):(jack::Client, jack::ClientStatus) = jack::Client::new("rasta", jack::ClientOptions::NO_START_SERVER)?;
 
@@ -40,7 +40,7 @@ fn main() -> Result<(), jack::Error> {
     let mut user_input = String::new();
     io::stdin().read_line(&mut user_input).ok();
 
-    thread::spawn(move || {fourrier_thread(receiver)});
+    thread::spawn(move || {fourier_thread(receiver)});
 
     // Wait for user input to quit
     println!("Press enter/return to quit...");
@@ -52,7 +52,8 @@ fn main() -> Result<(), jack::Error> {
     Ok(())
 }
 
-fn fourrier_thread(receiver:Receiver<Vec<f32>>)
+//receives audio input, start FFT on most recent data and display results
+fn fourier_thread(receiver:Receiver<Vec<f32>>)
 {
     let mut planner = FFTplanner::<f32>::new(false);
     let mut queue = std::collections::VecDeque::new();
@@ -72,27 +73,27 @@ fn fourrier_thread(receiver:Receiver<Vec<f32>>)
         }
         //if too much input was aggregated, get rid of the oldest
         queue.truncate(16);
-        //aggregate input, oldest first
+        //concatenate audio buffers, in order
         let mut vec:Vec<f32> = vec!();
         for input in queue.iter().rev()
         {
             vec.extend(input);
         }
         //apply fft and extract frequencies
-        let vec = fourrier_analysis(&vec[..], &mut planner, None);// Some(&mask));
-
-        display_notes(vec);
+        let vec = fourier_analysis(&vec[..], &mut planner, None);// Some(&mask));
+        //calculate and display results
+        calculate_scores(vec);
     }
 }
 
-fn fourrier_analysis(
+fn fourier_analysis(
     vec:&[f32],
     planner:&mut FFTplanner<f32>,
     mask:Option<&Vec<f32>>) -> Vec<Complex<f32>>
 {
     //setup fft parameters
     let len = vec.len();
-    let mut fft_in = vec.iter().map(|f| Complex{re:*f, im:0f32}).collect_vec();
+    let mut fft_in = vec.iter().map(|&f| Complex{re:f, im:0f32}).collect_vec();
     let mut fft_out = vec![Complex::default(); len];
     let fft = planner.plan_fft(len);
     
@@ -105,8 +106,11 @@ fn fourrier_analysis(
     //map results to frequencies and intensity
     for (Complex{re:a, im:b}, i) in fft_out.iter_mut().zip(1..)
     {
+        //calculate intensity
         *b = (*a * *a + *b * *b).sqrt();
+        //calculate frequency
         *a = i as f32 * 48000f32 / len as f32;
+        //noise masking, currently unused
         if let Some(vec) = mask {
             if *b > vec[i] {
                 *b -= vec[i];
@@ -114,13 +118,14 @@ fn fourrier_analysis(
                 *b = 0f32;
             }
         }
+        //reducing intensity of frequencies out of human hearing range
         *b *= a_weigh_frequency(*a);
     }
 
     //sort by intensity
     fft_out.sort_by(|b, a| a.im.partial_cmp(&b.im).unwrap());
 
-    //print 9 most intense frequencies
+    // print 9 most intense frequencies (you'll never believe number 4)
     // for &Complex{re:a, im:b} in fft_out.iter().take(9)
     // {
     //     print!("{:^5.0}:{:^6.2} ", a, b);
@@ -145,36 +150,66 @@ fn a_weigh_frequency(freq:f32) -> f32
     1.2589f32 * num / den
 }
 
-fn display_notes(frequencies:Vec<Complex<f32>>)
-{
-    let names = ["A ", "A# ", "B ", "C ", "C# ", "D ", "D# ", "E ", "F ", "F# ", "G ", "G# "];
-    
+const NOTE_NAMES:[&str; 12] = [" C ", " C#", " D ", " D#", " E ", " F ", " F#", " G ", " G#", " A ", " A#", " B "];
+const NOTE_NAMES_FRENCH:[&str; 12] = ["Do ", "Do#", "Ré ", "Ré#", "Mi ", "Fa ", "Fa#", "So ", "So#", "La ", "La#", "Si "];
+const MAX_NOTE:usize = 88;
+const BASE_NOTE:usize = 12 * 4 + 10; // C1 + 4 octaves + 10 == A4
+const BASE_FREQUENCY:f32 = 440f32; //frequency of A4
 
-    for i in -17i32 .. 20i32 {
-        display_note(
-            names[(i + 120) as usize % 12],
-            440f32 * 2f32.powf(i as f32 / 12f32),
-            (i + 21) / 12 + 2,
-            &frequencies)
+
+fn calculate_scores(frequencies:Vec<Complex<f32>>)
+{
+    let mut scores:Vec<f32> = Vec::with_capacity(37);
+    let mut min = std::f32::INFINITY;
+    let mut max = std::f32::NEG_INFINITY;
+
+    //for every note, calculate dissonance score
+    for i in 0 ..= MAX_NOTE {
+        let mut score = 0f32;
+        let diff_a:i32 = i as i32 - BASE_NOTE as i32; 
+        let hz = BASE_FREQUENCY * 2f32.powf(diff_a as f32 / 12f32);
+        //for Complex{re:a, im:b} in [220, 440, 880].iter().map(|&hz| Complex{re:hz as f32, im:100f32})
+        for &Complex{re:a, im:b} in frequencies.iter()
+        {
+            score += dissonance(a, hz) * b;
+        }
+        min = min.min(score);
+        max = max.max(score);
+        scores.push(score);
     }
-    println!("");
-}
-
-fn display_note(name:&str, hz:f32, oct:i32, frequencies:&Vec<Complex<f32>>)
-{
-    let mut score = 0f32;
-
-    for Complex{re:a, im:b} in frequencies// [Complex{re:441f32, im:201f32}, Complex{re:221f32, im:201f32}, Complex{re:881f32, im:201f32}].iter()
+    //normalize score
+    for score in scores.iter_mut()
     {
-        score += dissonance(*a, hz) * *b;
+        *score = (*score - min) / (max - min);
+        *score = score.powf(0.5f32);
     }
-    score /= frequencies.len() as f32;
-    let gradient = (clamp((score - 0.01) * 30f32) * 255f32) as u8;
-    let style = style(name).with(Color::DarkBlue).on(Color::Rgb{r:gradient, g:255 - gradient, b:0});
-    print!("{}", style);
+    //display fretboard
+    display_guitar(&scores[..]);
 }
 
-const DISSONANCE_OCTAVE_RATIO:f32 = 0.24324520013732764f32 / DISSONANCE_TABLE[0];
+const GUITAR_STRING_LENGTH:usize = 44;
+const GUITAR_STRINGS:[usize; 6] = [16 + 0, 16 + 5, 16 + 10, 16 + 15, 16 + 19, 16 + 24];
+
+fn display_guitar(scores:&[f32])
+{
+    println!("");
+    for &j in GUITAR_STRINGS.iter().rev()
+    {
+        for i in j .. j + GUITAR_STRING_LENGTH
+        {
+            let name = NOTE_NAMES[i % 12];
+            let score = scores[i];
+            let gradient = (clamp(score) * 255f32) as u8;
+            let style = style(name)
+                .with(Color::DarkBlue)
+                .on(Color::Rgb{r:gradient, g:255 - gradient, b:0});
+            print!("{}", style);
+        }
+        println!("");
+    }
+}
+
+const DISSONANCE_OCTAVE_RATIO:f32 = 1.05;
 
 fn dissonance(f_1:f32, f_2:f32) -> f32
 {
@@ -188,8 +223,8 @@ fn dissonance(f_1:f32, f_2:f32) -> f32
     let octaves = ratio.log2() as i32;
     //reduce to less than 1 octave
     let ratio = ratio / 2f32.powi(octaves);
-    //decrease dissonance with octave distance
-    let cons = 1f32;//DISSONANCE_OCTAVE_RATIO.powi(octaves);
+    //increase dissonance with octave distance
+    let cons = DISSONANCE_OCTAVE_RATIO.powi(octaves);
 
     cons * DISSONANCE_TABLE[((ratio - 1f32) * 200f32) as usize].powf(2f32)
 }
