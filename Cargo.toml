@@ -7,5 +7,6 @@ edition = "2018"
 [dependencies]
 rustfft = '>=3.0.0'
 jack = '>=0.6'
-splines = '>=0.2.3'
 itertools = '>=0.8.0'
+crossterm = '>=0.5.4'
+clampf = '>= 0.1.1'
