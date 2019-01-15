@@ -124,21 +124,21 @@ fn fourier_analysis(
     fft_out.truncate(len / 2);
     fft_out.remove(0);
     // Map results to frequencies and intensity
-    for (Complex { re: a, im: b }, i) in fft_out.iter_mut().zip(1..) {
+    for (c, i) in fft_out.iter_mut().zip(1..) {
         // Calculate intensity
-        *b = (*a * *a + *b * *b).sqrt();
+        c.im = c.norm_sqr();// (*a * *a + c.im * c.im).sqrt();
         // Calculate frequency
-        *a = i as f32 * 48000f32 / len as f32;
+        c.re = i as f32 * 48000f32 / len as f32;
         // Noise masking, currently unused
         if let Some(vec) = mask {
-            if *b > vec[i] {
-                *b -= vec[i];
+            if c.im > vec[i] {
+                c.im -= vec[i];
             } else {
-                *b = 0f32;
+                c.im = 0f32;
             }
         }
         // Reducing intensity of frequencies out of human hearing range
-        *b *= a_weigh_frequency(*a);
+        c.im *= a_weigh_frequency(c.re);
     }
 
     // Sort by intensity
