@@ -1,5 +1,5 @@
 #![feature(drain_filter)]
-extern crate jack;
+extern crate cpal;
 extern crate itertools;
 use std::io;
 use std::vec;
@@ -15,30 +15,64 @@ use clampf::clamp;
 use crossterm::style;
 use crossterm::Color;
 
+use cpal::StreamData::Input;
+use cpal::UnknownTypeInputBuffer::{U16, I16, F32};
+use cpal::Sample;
+
 //setup ports, and start threads
-fn main() -> Result<(), jack::Error> {
-    let (client, _status):(jack::Client, jack::ClientStatus) = jack::Client::new("rasta", jack::ClientOptions::NO_START_SERVER)?;
+fn main() {
+    // Setup the default input device and stream with the default input format.
+    let device = cpal::default_input_device()
+        .expect("Failed to get default input device");
+    println!("Default input device: {}", device.name());
 
-    // register ports
-    let in_b = client
-        .register_port("guitar_in", jack::AudioIn::default())?;
+    // Get the default sound input format
+    let format = device.default_input_format()
+        .expect("Failed to get default input format");
+    println!("Default input format: {:?}", format);
 
+    // Start the cpal input stream
+    let event_loop = cpal::EventLoop::new();
+    let stream_id = event_loop.build_input_stream(&device, &format)
+        .expect("Failed to build input stream");
+    event_loop.play_stream(stream_id);
+
+    // Prepare the thread communication tools
+    let recording = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let recording_2 = recording.clone();
     let (sender, receiver) = channel::<Vec<f32>>();
 
-    //start the rasta callback on the default audio input
-    let process_callback = move |_: &jack::Client, ps: &jack::ProcessScope| -> jack::Control {
-        let in_b_p = in_b.as_slice(ps);
-        
-        sender.send(in_b_p.to_vec()).unwrap();
-
-        jack::Control::Continue
-    };
-    let process = jack::ClosureProcessHandler::new(process_callback);
-    let active_client = client.activate_async((), process)?;
-
+    // Await user input
     println!("Press enter/return to start reading frequencies ...");
     let mut user_input = String::new();
     io::stdin().read_line(&mut user_input).ok();
+
+    // Spawn the audio input reading thread
+    std::thread::spawn(move || {
+        event_loop.run(move |_, data| {
+            // If we're done recording, return early.
+            if !recording_2.load(std::sync::atomic::Ordering::Relaxed) {
+                return;
+            }
+
+            // Otherwise send input data to fourier thread
+            if let Input{buffer: input_data} = data
+            {
+                let float_buffer = match input_data {
+                    U16(buffer) => {
+                        buffer.iter().map(|u| u.to_f32()).collect_vec()
+                    },
+                    I16(buffer) => {
+                        buffer.iter().map(|i| i.to_f32()).collect_vec()
+                    },
+                    F32(buffer) => {
+                        buffer.to_vec()
+                    }
+                };
+                sender.send(float_buffer).unwrap();
+            }
+        });
+    });
 
     thread::spawn(move || {fourier_thread(receiver)});
 
@@ -46,10 +80,6 @@ fn main() -> Result<(), jack::Error> {
     println!("Press enter/return to quit...");
     let mut user_input = String::new();
     io::stdin().read_line(&mut user_input).ok();
-
-    active_client.deactivate()?;
-
-    Ok(())
 }
 
 //receives audio input, start FFT on most recent data and display results
@@ -209,7 +239,7 @@ fn display_guitar(scores:&[f32])
     }
 }
 
-const DISSONANCE_OCTAVE_RATIO:f32 = 1.05;
+const DISSONANCE_OCTAVE_RATIO:f32 = 1.02;
 
 fn dissonance(f_1:f32, f_2:f32) -> f32
 {
