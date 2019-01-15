@@ -1,17 +1,21 @@
-extern crate cpal;
-extern crate itertools;
-use clampf::clamp;
-use crossterm::style;
-use crossterm::Color;
-use itertools::Itertools;
-use rustfft::num_complex::Complex;
-use rustfft::FFTplanner;
-use std::io;
+// Standard
 use std::sync::mpsc::channel;
 use std::sync::mpsc::Receiver;
 use std::thread;
 use std::vec;
+use std::io;
+use std::io::BufWriter;
+use std::io::Write;
 
+// Tools
+use clampf::clamp;
+use itertools::Itertools;
+
+// Math
+use rustfft::num_complex::Complex;
+use rustfft::FFTplanner;
+
+// Audio
 use cpal::Sample;
 use cpal::StreamData::Input;
 use cpal::UnknownTypeInputBuffer::{F32, I16, U16};
@@ -58,6 +62,7 @@ fn main() {
             }
         });
     });
+
     // Spawn the audio analysis thread
     thread::spawn(move || fourier_thread(receiver));
 
@@ -66,6 +71,8 @@ fn main() {
     let mut user_input = String::new();
     io::stdin().read_line(&mut user_input).ok();
 }
+
+const PACKET_ACCUMULATED:usize = 32;
 
 // Receives audio input, start FFT on most recent data and display results
 fn fourier_thread(receiver: Receiver<Vec<f32>>) {
@@ -78,12 +85,12 @@ fn fourier_thread(receiver: Receiver<Vec<f32>>) {
             queue.push_front(input);
         }
         // If not enough input was aggregated, wait and try again
-        if queue.len() < 16 {
+        if queue.len() < PACKET_ACCUMULATED {
             queue.push_front(receiver.recv().unwrap());
             continue;
         }
         // If too much input was aggregated, get rid of the oldest
-        queue.truncate(16);
+        queue.truncate(PACKET_ACCUMULATED);
         // Concatenate audio buffers, in order
         let mut vec: Vec<f32> = vec![];
         for input in queue.iter().rev() {
@@ -202,21 +209,31 @@ const GUITAR_STRING_LENGTH: usize = 44;
 const GUITAR_STRINGS: [usize; 6] = [16 + 0, 16 + 5, 16 + 10, 16 + 15, 16 + 19, 16 + 24];
 
 fn display_guitar(scores: &[f32]) {
-    println!("");
+    // Clear the terminal
+    // crossterm::terminal::terminal().clear(crossterm::terminal::ClearType::All).unwrap();
+    // Create buffer to avoid flicker
+    let mut buffer = BufWriter::new(io::stdout());
+
+    writeln!(&mut buffer, "").unwrap();
+
+    // For every guitart strings
     for &j in GUITAR_STRINGS.iter().rev() {
+        // For every note on that string
         for i in j..j + GUITAR_STRING_LENGTH {
+            // Get note name and calculated score
             let name = NOTE_NAMES[i % 12];
             let score = scores[i];
+            // Write the name with the appropriate color
             let gradient = (clamp(score) * 255f32) as u8;
-            let style = style(name).with(Color::DarkBlue).on(Color::Rgb {
-                r: gradient,
-                g: 255 - gradient,
-                b: 0,
-            });
-            print!("{}", style);
+            write!(&mut buffer, "\x1b[48;2;{red};{green};0m{name}",
+                red = gradient,
+                green = (255 - gradient),
+                name = name
+            ).unwrap();
         }
-        println!("");
+        writeln!(&mut buffer, "\x1b[0;0m").unwrap();
     }
+    buffer.flush().unwrap();
 }
 
 const DISSONANCE_OCTAVE_RATIO: f32 = 1.02;

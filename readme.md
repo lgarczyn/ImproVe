@@ -23,3 +23,4 @@ Currently assumes data packet to be 1024 bytes, with 48000 samples every seconds
 * Try adding auditory suggestions on keypress
 * Try adding a better dissonance model, using an audi sample of the targeted instrument
 * Keep researching alternatives to FFTs
+* Language and Instrument switching
