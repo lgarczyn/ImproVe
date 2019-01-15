@@ -59,13 +59,16 @@ fn main() {
         });
     });
     // Spawn the audio analysis thread
-    thread::spawn(move || fourier_thread(receiver));
+    //thread::spawn(move || fourier_thread(receiver));
+    fourier_thread(receiver);
 
     // Wait for user input to quit
-    println!("Press enter/return to quit...");
-    let mut user_input = String::new();
-    io::stdin().read_line(&mut user_input).ok();
+    //println!("Press enter/return to quit...");
+    //let mut user_input = String::new();
+    //io::stdin().read_line(&mut user_input).ok();
 }
+
+const PACKET_ACCUMULATED:usize = 32;
 
 // Receives audio input, start FFT on most recent data and display results
 fn fourier_thread(receiver: Receiver<Vec<f32>>) {
@@ -78,29 +81,31 @@ fn fourier_thread(receiver: Receiver<Vec<f32>>) {
             queue.push_front(input);
         }
         // If not enough input was aggregated, wait and try again
-        if queue.len() < 16 {
+        if queue.len() < PACKET_ACCUMULATED {
             queue.push_front(receiver.recv().unwrap());
             continue;
         }
         // If too much input was aggregated, get rid of the oldest
-        queue.truncate(16);
+        queue.truncate(PACKET_ACCUMULATED);
         // Concatenate audio buffers, in order
         let mut vec: Vec<f32> = vec![];
         for input in queue.iter().rev() {
             vec.extend(input);
         }
         // Apply fft and extract frequencies
-        let vec = fourier_analysis(&vec[..], &mut planner, None); // Some(&mask));
+        let vec = fourier_analysis(vec, &mut planner, None); // Some(&mask));
                                                                   // Calculate and display results
         calculate_scores(vec);
     }
 }
 
 fn fourier_analysis(
-    vec: &[f32],
+    vec: Vec<f32>,
     planner: &mut FFTplanner<f32>,
     mask: Option<&Vec<f32>>,
 ) -> Vec<Complex<f32>> {
+    // Interpolate data
+    let vec = resample_vector(vec, 4); 
     // Setup fft parameters
     let len = vec.len();
     let mut fft_in = vec
@@ -145,6 +150,62 @@ fn fourier_analysis(
     // println!("");
 
     fft_out
+}
+
+fn resample_vector(vec:Vec<f32>, exponant:i32) -> Vec<f32> {
+    // If the exponant is negative, skip elements
+    if exponant < 0 {
+        // Calculate the number of elements to skip
+        // -1 -> 2
+        // -2 -> 4
+        // -3 -> 8
+        let ratio = 2 << (- exponant - 1) as u32;
+        vec.iter().step_by(ratio).cloned().collect_vec()
+    }
+    // If the exponant is positive, interpolate elements
+    else if exponant > 0 {
+        // Calculate sample to element ratio, and new length
+        let ratio = 2 << (exponant - 1) as u32;
+        let len = vec.len() * ratio;
+        // Pad data with duplicate values for interpolating
+        let vec = std::iter::once(vec[0])
+            .chain(vec.iter().cloned())
+            .chain(std::iter::repeat(vec[vec.len() - 1]).take(2))
+            .collect_vec();
+
+        // Interpolate
+        let mut out = Vec::with_capacity(len * ratio);
+        for i in 1 .. vec.len() - 2 {
+            out.push(vec[i]);
+            let mut data:[f32; 4] = Default::default(); 
+            data.copy_from_slice(&vec[i - 1 .. i + 3]);
+            for j in 1 .. ratio {
+                out.push(spline_interpolate(&data, j as f32 / ratio as f32));
+            }
+        }
+        if out.len() != len {
+            panic!("wtf");
+        }
+        out
+    }
+    // If the exponant is 0, just return the vector
+    else {
+        vec
+    }
+}
+
+fn spline_interpolate(data:&[f32], t:f32) -> f32
+{
+    let t2 = t * t;
+    let t3 = t2 * t;
+    let two_t3 = 2. * t3;
+    let three_t2 = 3. * t2;
+
+    // tangents
+    let m0 = data[2] - data[0];
+    let m1 = data[3] - data[1];
+
+    data[1] * (two_t3 - three_t2 + 1.) + m0 * (t3 - 2. * t2 + t) + data[2] * (-two_t3 + three_t2) + m1 * (t3 - t2)
 }
 
 // https://fr.mathworks.com/matlabcentral/fileexchange/46819-a-weighting-filter-with-matlab
