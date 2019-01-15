@@ -1,25 +1,22 @@
-#![feature(drain_filter)]
 extern crate cpal;
 extern crate itertools;
-use std::io;
-use std::vec;
-use std::result::Result;
-use std::result::Result::Ok;
-use std::sync::mpsc::channel;
-use std::sync::mpsc::Receiver;
-use std::thread;
-use rustfft::FFTplanner;
-use rustfft::num_complex::Complex;
-use itertools::Itertools;
 use clampf::clamp;
 use crossterm::style;
 use crossterm::Color;
+use itertools::Itertools;
+use rustfft::num_complex::Complex;
+use rustfft::FFTplanner;
+use std::io;
+use std::sync::mpsc::channel;
+use std::sync::mpsc::Receiver;
+use std::thread;
+use std::vec;
 
-use cpal::StreamData::Input;
-use cpal::UnknownTypeInputBuffer::{U16, I16, F32};
 use cpal::Sample;
+use cpal::StreamData::Input;
+use cpal::UnknownTypeInputBuffer::{F32, I16, U16};
 
-//setup ports, and start threads
+// Setup ports, and start threads
 fn main() {
     // Setup the default input device and stream with the default input format.
     let device = cpal::default_input_device()
@@ -27,19 +24,19 @@ fn main() {
     println!("Default input device: {}", device.name());
 
     // Get the default sound input format
-    let format = device.default_input_format()
+    let format = device
+        .default_input_format()
         .expect("Failed to get default input format");
     println!("Default input format: {:?}", format);
 
     // Start the cpal input stream
     let event_loop = cpal::EventLoop::new();
-    let stream_id = event_loop.build_input_stream(&device, &format)
+    let stream_id = event_loop
+        .build_input_stream(&device, &format)
         .expect("Failed to build input stream");
     event_loop.play_stream(stream_id);
 
-    // Prepare the thread communication tools
-    let recording = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
-    let recording_2 = recording.clone();
+    // The channel to send data from audio thread to fourier thread
     let (sender, receiver) = channel::<Vec<f32>>();
 
     // Await user input
@@ -50,31 +47,19 @@ fn main() {
     // Spawn the audio input reading thread
     std::thread::spawn(move || {
         event_loop.run(move |_, data| {
-            // If we're done recording, return early.
-            if !recording_2.load(std::sync::atomic::Ordering::Relaxed) {
-                return;
-            }
-
             // Otherwise send input data to fourier thread
-            if let Input{buffer: input_data} = data
-            {
+            if let Input { buffer: input_data } = data {
                 let float_buffer = match input_data {
-                    U16(buffer) => {
-                        buffer.iter().map(|u| u.to_f32()).collect_vec()
-                    },
-                    I16(buffer) => {
-                        buffer.iter().map(|i| i.to_f32()).collect_vec()
-                    },
-                    F32(buffer) => {
-                        buffer.to_vec()
-                    }
+                    U16(buffer) => buffer.iter().map(|u| u.to_f32()).collect_vec(),
+                    I16(buffer) => buffer.iter().map(|i| i.to_f32()).collect_vec(),
+                    F32(buffer) => buffer.to_vec(),
                 };
                 sender.send(float_buffer).unwrap();
             }
         });
     });
-
-    thread::spawn(move || {fourier_thread(receiver)});
+    // Spawn the audio analysis thread
+    thread::spawn(move || fourier_thread(receiver));
 
     // Wait for user input to quit
     println!("Press enter/return to quit...");
@@ -82,65 +67,62 @@ fn main() {
     io::stdin().read_line(&mut user_input).ok();
 }
 
-//receives audio input, start FFT on most recent data and display results
-fn fourier_thread(receiver:Receiver<Vec<f32>>)
-{
+// Receives audio input, start FFT on most recent data and display results
+fn fourier_thread(receiver: Receiver<Vec<f32>>) {
     let mut planner = FFTplanner::<f32>::new(false);
     let mut queue = std::collections::VecDeque::new();
 
-    loop
-    {
-        //aggregate all pending input
-        for input in receiver.try_iter()
-        {
+    loop {
+        // Aggregate all pending input
+        for input in receiver.try_iter() {
             queue.push_front(input);
         }
-        //if not enough input was aggregated, wait and try again
-        if queue.len() < 16
-        {
+        // If not enough input was aggregated, wait and try again
+        if queue.len() < 16 {
             queue.push_front(receiver.recv().unwrap());
             continue;
         }
-        //if too much input was aggregated, get rid of the oldest
+        // If too much input was aggregated, get rid of the oldest
         queue.truncate(16);
-        //concatenate audio buffers, in order
-        let mut vec:Vec<f32> = vec!();
-        for input in queue.iter().rev()
-        {
+        // Concatenate audio buffers, in order
+        let mut vec: Vec<f32> = vec![];
+        for input in queue.iter().rev() {
             vec.extend(input);
         }
-        //apply fft and extract frequencies
-        let vec = fourier_analysis(&vec[..], &mut planner, None);// Some(&mask));
-        //calculate and display results
+        // Apply fft and extract frequencies
+        let vec = fourier_analysis(&vec[..], &mut planner, None); // Some(&mask));
+                                                                  // Calculate and display results
         calculate_scores(vec);
     }
 }
 
 fn fourier_analysis(
-    vec:&[f32],
-    planner:&mut FFTplanner<f32>,
-    mask:Option<&Vec<f32>>) -> Vec<Complex<f32>>
-{
-    //setup fft parameters
+    vec: &[f32],
+    planner: &mut FFTplanner<f32>,
+    mask: Option<&Vec<f32>>,
+) -> Vec<Complex<f32>> {
+    // Setup fft parameters
     let len = vec.len();
-    let mut fft_in = vec.iter().map(|&f| Complex{re:f, im:0f32}).collect_vec();
+    let mut fft_in = vec
+        .iter()
+        .map(|&f| Complex { re: f, im: 0f32 })
+        .collect_vec();
     let mut fft_out = vec![Complex::default(); len];
     let fft = planner.plan_fft(len);
-    
-    //process fft
+
+    // Process fft
     fft.process(&mut fft_in, &mut fft_out);
 
-    //discard useless data
+    // Discard useless data
     fft_out.truncate(len / 2);
     fft_out.remove(0);
-    //map results to frequencies and intensity
-    for (Complex{re:a, im:b}, i) in fft_out.iter_mut().zip(1..)
-    {
-        //calculate intensity
+    // Map results to frequencies and intensity
+    for (Complex { re: a, im: b }, i) in fft_out.iter_mut().zip(1..) {
+        // Calculate intensity
         *b = (*a * *a + *b * *b).sqrt();
-        //calculate frequency
+        // Calculate frequency
         *a = i as f32 * 48000f32 / len as f32;
-        //noise masking, currently unused
+        // Noise masking, currently unused
         if let Some(vec) = mask {
             if *b > vec[i] {
                 *b -= vec[i];
@@ -148,11 +130,11 @@ fn fourier_analysis(
                 *b = 0f32;
             }
         }
-        //reducing intensity of frequencies out of human hearing range
+        // Reducing intensity of frequencies out of human hearing range
         *b *= a_weigh_frequency(*a);
     }
 
-    //sort by intensity
+    // Sort by intensity
     fft_out.sort_by(|b, a| a.im.partial_cmp(&b.im).unwrap());
 
     // print 9 most intense frequencies (you'll never believe number 4)
@@ -165,101 +147,95 @@ fn fourier_analysis(
     fft_out
 }
 
-//https://fr.mathworks.com/matlabcentral/fileexchange/46819-a-weighting-filter-with-matlab
-//reduce frequency intensity based on human perception
-fn a_weigh_frequency(freq:f32) -> f32
-{
+// https://fr.mathworks.com/matlabcentral/fileexchange/46819-a-weighting-filter-with-matlab
+// Reduce frequency intensity based on human perception
+fn a_weigh_frequency(freq: f32) -> f32 {
     let c1 = 12194.217f32.powi(2);
     let c2 = 20.598997f32.powi(2);
     let c3 = 107.65265f32.powi(2);
     let c4 = 737.86223f32.powi(2);
-    //evaluate the A-weighting filter in the frequency domain
+    // Evaluate the A-weighting filter in the frequency domain
     let freq = freq.powi(2);
-    let num = c1*(freq.powi(2));
-    let den = (freq+c2) * ((freq+c3)*(freq+c4)).sqrt() * (freq+c1);
+    let num = c1 * (freq.powi(2));
+    let den = (freq + c2) * ((freq + c3) * (freq + c4)).sqrt() * (freq + c1);
     1.2589f32 * num / den
 }
 
-const NOTE_NAMES:[&str; 12] = [" C ", " C#", " D ", " D#", " E ", " F ", " F#", " G ", " G#", " A ", " A#", " B "];
-const NOTE_NAMES_FRENCH:[&str; 12] = ["Do ", "Do#", "Ré ", "Ré#", "Mi ", "Fa ", "Fa#", "So ", "So#", "La ", "La#", "Si "];
-const MAX_NOTE:usize = 88;
-const BASE_NOTE:usize = 12 * 4 + 10; // C1 + 4 octaves + 10 == A4
-const BASE_FREQUENCY:f32 = 440f32; //frequency of A4
+const NOTE_NAMES: [&str; 12] = [
+    " C ", " C#", " D ", " D#", " E ", " F ", " F#", " G ", " G#", " A ", " A#", " B ",
+];
+const NOTE_NAMES_FRENCH: [&str; 12] = [
+    "Do ", "Do#", "Ré ", "Ré#", "Mi ", "Fa ", "Fa#", "So ", "So#", "La ", "La#", "Si ",
+];
+const MAX_NOTE: usize = 88;
+const BASE_NOTE: usize = 12 * 4 + 10; // C1 + 4 octaves + 10 == A4
+const BASE_FREQUENCY: f32 = 440f32; // Frequency of A4
 
-
-fn calculate_scores(frequencies:Vec<Complex<f32>>)
-{
-    let mut scores:Vec<f32> = Vec::with_capacity(37);
+fn calculate_scores(frequencies: Vec<Complex<f32>>) {
+    let mut scores: Vec<f32> = Vec::with_capacity(37);
     let mut min = std::f32::INFINITY;
     let mut max = std::f32::NEG_INFINITY;
 
-    //for every note, calculate dissonance score
-    for i in 0 ..= MAX_NOTE {
+    // For every note, calculate dissonance score
+    for i in 0..=MAX_NOTE {
         let mut score = 0f32;
-        let diff_a:i32 = i as i32 - BASE_NOTE as i32; 
+        let diff_a: i32 = i as i32 - BASE_NOTE as i32;
         let hz = BASE_FREQUENCY * 2f32.powf(diff_a as f32 / 12f32);
-        //for Complex{re:a, im:b} in [220, 440, 880].iter().map(|&hz| Complex{re:hz as f32, im:100f32})
-        for &Complex{re:a, im:b} in frequencies.iter()
-        {
+        // For Complex{re:a, im:b} in [220, 440, 880].iter().map(|&hz| Complex{re:hz as f32, im:100f32})
+        for &Complex { re: a, im: b } in frequencies.iter() {
             score += dissonance(a, hz) * b;
         }
         min = min.min(score);
         max = max.max(score);
         scores.push(score);
     }
-    //normalize score
-    for score in scores.iter_mut()
-    {
+    // Normalize score
+    for score in scores.iter_mut() {
         *score = (*score - min) / (max - min);
         *score = score.powf(0.5f32);
     }
-    //display fretboard
+    // Display fretboard
     display_guitar(&scores[..]);
 }
 
-const GUITAR_STRING_LENGTH:usize = 44;
-const GUITAR_STRINGS:[usize; 6] = [16 + 0, 16 + 5, 16 + 10, 16 + 15, 16 + 19, 16 + 24];
+const GUITAR_STRING_LENGTH: usize = 44;
+const GUITAR_STRINGS: [usize; 6] = [16 + 0, 16 + 5, 16 + 10, 16 + 15, 16 + 19, 16 + 24];
 
-fn display_guitar(scores:&[f32])
-{
+fn display_guitar(scores: &[f32]) {
     println!("");
-    for &j in GUITAR_STRINGS.iter().rev()
-    {
-        for i in j .. j + GUITAR_STRING_LENGTH
-        {
+    for &j in GUITAR_STRINGS.iter().rev() {
+        for i in j..j + GUITAR_STRING_LENGTH {
             let name = NOTE_NAMES[i % 12];
             let score = scores[i];
             let gradient = (clamp(score) * 255f32) as u8;
-            let style = style(name)
-                .with(Color::DarkBlue)
-                .on(Color::Rgb{r:gradient, g:255 - gradient, b:0});
+            let style = style(name).with(Color::DarkBlue).on(Color::Rgb {
+                r: gradient,
+                g: 255 - gradient,
+                b: 0,
+            });
             print!("{}", style);
         }
         println!("");
     }
 }
 
-const DISSONANCE_OCTAVE_RATIO:f32 = 1.02;
+const DISSONANCE_OCTAVE_RATIO: f32 = 1.02;
 
-fn dissonance(f_1:f32, f_2:f32) -> f32
-{
-    //find the ratio between the two frequencies
-    let ratio = if f_1 < f_2
-        { f_2 / f_1 }
-        else 
-        { f_1 / f_2 };
+fn dissonance(f_1: f32, f_2: f32) -> f32 {
+    // Find the ratio between the two frequencies
+    let ratio = if f_1 < f_2 { f_2 / f_1 } else { f_1 / f_2 };
 
-    //get number of full octaves
+    // Get number of full octaves
     let octaves = ratio.log2() as i32;
-    //reduce to less than 1 octave
+    // Reduce to less than 1 octave
     let ratio = ratio / 2f32.powi(octaves);
-    //increase dissonance with octave distance
+    // Increase dissonance with octave distance
     let cons = DISSONANCE_OCTAVE_RATIO.powi(octaves);
 
     cons * DISSONANCE_TABLE[((ratio - 1f32) * 200f32) as usize].powf(2f32)
 }
 
-const DISSONANCE_TABLE:[f32;200] = [
+const DISSONANCE_TABLE: [f32; 200] = [
     0.4040681240751095f32,
     0.518491547915879f32,
     0.6611341146326413f32,
@@ -460,4 +436,4 @@ const DISSONANCE_TABLE:[f32;200] = [
     0.3618171142230009f32,
     0.3256405570375345f32,
     0.2819836211528104f32,
-    ];
+];
