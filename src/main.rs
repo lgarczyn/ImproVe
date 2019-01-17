@@ -216,7 +216,7 @@ fn display_guitar(scores: &[f32]) {
 
     writeln!(&mut buffer, "").unwrap();
 
-    // For every guitart strings
+    // For every guitar strings
     for &j in GUITAR_STRINGS.iter().rev() {
         // For every note on that string
         for i in j..j + GUITAR_STRING_LENGTH {
