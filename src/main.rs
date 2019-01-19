@@ -20,11 +20,67 @@ use cpal::Sample;
 use cpal::StreamData::Input;
 use cpal::UnknownTypeInputBuffer::{F32, I16, U16};
 
-// Setup ports, and start threads
+// Parser
+use clap::{Arg, App};
+
 fn main() {
-    // Setup the default input device and stream with the default input format.
-    let device = cpal::default_input_device()
-        .expect("Failed to get default input device");
+    // Parse args
+    let matches = App::new("ImproVe")
+        .version("0.1")
+        .author("Louis Garczynski <louis.roc@gmail.com>")
+        .about("Real-time improvisation suggestions")
+        .arg(Arg::with_name("resolution")
+            .short("r")
+            .long("resolution")
+            .value_name("UINT")
+            .help("Width of audio data analyzed every step\n\
+                  Higher values 'blur' the audio over time\n\
+                  Higher values can have a significant performance cost\n\
+                  Powers of two are faster\n")
+            .next_line_help(true)
+            .default_value("32")
+            .validator(|s| match s.parse::<u32>() {
+                Ok(_) => Ok(()),
+                Err(_) => Err("Argument is not an unsigned int".to_owned())
+            }))
+        .arg(Arg::with_name("notation")
+            .short("n")
+            .long("notation")
+            .value_name("LANGUAGE")
+            .help("English or Romance notation\n")
+            .next_line_help(true)
+            .possible_values(&["e", "r"])
+            .default_value("e"))
+        .arg(Arg::with_name("input")
+            .short("i")
+            .long("input")
+            .value_name("DEVICE")
+            .help("The id of the audio input you wish to use\n")
+            .next_line_help(true)
+            .takes_value(true))
+        .get_matches();
+    
+    // Get notation convention
+    let notation = match matches.value_of("notation").unwrap()
+    {
+        "e" => NOTE_NAMES_ENGLISH,
+        _ => NOTE_NAMES_ROMANCE,
+    };
+
+    // Get number of packets to read in a single FFT
+    let resolution = matches.value_of("resolution").unwrap().parse::<u32>().unwrap();
+
+    // Get the desired input device, default or otherwise
+    let device = match matches.value_of("input")
+    {
+        None => cpal::default_input_device()
+            .expect("Failed to get default input device"),
+        Some(s) => cpal::input_devices()
+            .filter(|d| d.name() == s)
+            .next()
+            .expect(&format!("Could not find device named '{}'. Here's the list of available devices: {}.",
+                s, cpal::input_devices().map(|d| d.name()).join(", ")))
+    };
     println!("Default input device: {}", device.name());
 
     // Get the default sound input format
@@ -59,7 +115,7 @@ fn main() {
     });
 
     // Spawn the audio analysis thread
-    thread::spawn(move || fourier_thread(receiver));
+    thread::spawn(move || fourier_thread(receiver, notation, resolution as usize));
 
     // Wait for user input to quit
     println!("Press enter/return to quit...");
@@ -67,25 +123,34 @@ fn main() {
     io::stdin().read_line(&mut user_input).ok();
 }
 
-const PACKET_ACCUMULATED:usize = 32;
-
 // Receives audio input, start FFT on most recent data and display results
-fn fourier_thread(receiver: Receiver<Vec<f32>>) {
+fn fourier_thread(
+    receiver: Receiver<Vec<f32>>,
+    notation: [&str; 12],
+    resolution: usize) {
+    // The FFT pool, allows for optimized yet flexible data sizes
     let mut planner = FFTplanner::<f32>::new(false);
+    // The data queue, allows us to only apply the FFT to the most recent data
+    // Could eventually be moved to a ring buffer
     let mut queue = std::collections::VecDeque::new();
 
     loop {
         // Aggregate all pending input
         for input in receiver.try_iter() {
+            // Get rid of old input first
+            if queue.len() >= resolution
+            {
+                queue.pop_back();
+            }
+            // Push new input
             queue.push_front(input);
         }
         // If not enough input was aggregated, wait and try again
-        if queue.len() < PACKET_ACCUMULATED {
+        if queue.len() < resolution {
             queue.push_front(receiver.recv().unwrap());
             continue;
         }
-        // If too much input was aggregated, get rid of the oldest
-        queue.truncate(PACKET_ACCUMULATED);
+        assert!(queue.len() == resolution);
         // Concatenate audio buffers, in order
         let mut vec: Vec<f32> = vec![];
         for input in queue.iter().rev() {
@@ -94,9 +159,13 @@ fn fourier_thread(receiver: Receiver<Vec<f32>>) {
         // Apply fft and extract frequencies
         let vec = fourier_analysis(&vec[..], &mut planner, None); // Some(&mask));
                                                                   // Calculate and display results
-        calculate_scores(vec);
+        calculate_scores(vec, notation);
     }
 }
+
+// fn display_controls() {
+//     println!("[q] [←] [→] [l] [h]");
+// }
 
 fn fourier_analysis(
     vec: &[f32],
@@ -163,17 +232,17 @@ fn a_weigh_frequency(freq: f32) -> f32 {
     1.2589f32 * num / den
 }
 
-const NOTE_NAMES: [&str; 12] = [
+const NOTE_NAMES_ENGLISH: [&str; 12] = [
     " C ", " C#", " D ", " D#", " E ", " F ", " F#", " G ", " G#", " A ", " A#", " B ",
 ];
-const NOTE_NAMES_FRENCH: [&str; 12] = [
-    "Do ", "Do#", "Ré ", "Ré#", "Mi ", "Fa ", "Fa#", "So ", "So#", "La ", "La#", "Si ",
+const NOTE_NAMES_ROMANCE: [&str; 12] = [
+    "Do ", "Do#", "Ré ", "Ré#", "Mi ", "Fa ", "Fa#", "Sol", "So#", "La ", "La#", "Si ",
 ];
 const MAX_NOTE: usize = 88;
 const BASE_NOTE: usize = 12 * 4 + 10; // C1 + 4 octaves + 10 == A4
 const BASE_FREQUENCY: f32 = 440f32; // Frequency of A4
 
-fn calculate_scores(frequencies: Vec<Complex<f32>>) {
+fn calculate_scores(frequencies: Vec<Complex<f32>>, notation:[&str; 12]) {
     let mut scores: Vec<f32> = Vec::with_capacity(37);
     let mut min = std::f32::INFINITY;
     let mut max = std::f32::NEG_INFINITY;
@@ -197,34 +266,44 @@ fn calculate_scores(frequencies: Vec<Complex<f32>>) {
         *score = score.powf(0.5f32);
     }
     // Display fretboard
-    display_guitar(&scores[..]);
+    display_guitar(&scores[..], notation);
 }
 
 const GUITAR_STRING_LENGTH: usize = 44;
 const GUITAR_STRINGS: [usize; 6] = [16 + 0, 16 + 5, 16 + 10, 16 + 15, 16 + 19, 16 + 24];
 
-fn display_guitar(scores: &[f32]) {
+fn display_guitar(scores: &[f32], notation:[&str; 12]) {
     // Clear the terminal
     // crossterm::terminal::terminal().clear(crossterm::terminal::ClearType::All).unwrap();
     // Create buffer to avoid flicker
     let mut buffer = BufWriter::new(io::stdout());
 
-    writeln!(&mut buffer, "").unwrap();
+    write!(&mut buffer, "\n 0 |").unwrap();
+
+    for i in 1 .. GUITAR_STRING_LENGTH {
+        write!(&mut buffer, "{:^3}", i).unwrap();
+    }
+    write!(&mut buffer, "\n").unwrap();
 
     // For every guitar strings
     for &j in GUITAR_STRINGS.iter().rev() {
         // For every note on that string
         for i in j..j + GUITAR_STRING_LENGTH {
             // Get note name and calculated score
-            let name = NOTE_NAMES[i % 12];
+            let name = notation[i % 12];
             let score = scores[i];
             // Write the name with the appropriate color
             let gradient = (clamp(score) * 255f32) as u8;
-            write!(&mut buffer, "\x1b[48;2;{red};{green};0m{name}",
+            write!(&mut buffer, "\x1b[30;48;2;{red};{green};{blue}m{name}",
                 red = gradient,
                 green = (255 - gradient),
+                blue = gradient / 4,
                 name = name
             ).unwrap();
+            // Add the bar to differentiate the zero 'fret' from the rest
+            if i == j {
+                write!(&mut buffer, "\x1b[0;0m|").unwrap();
+            }
         }
         writeln!(&mut buffer, "\x1b[0;0m").unwrap();
     }

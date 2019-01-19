@@ -17,7 +17,7 @@ install 'libasound2-dev'
 
 You also need cargo, but that's a bit of a given for any rust project.
 
-Currently assumes data packet to be 1024 bytes, with 48000 samples every seconds.
+Run with `cargo run`, help with `cargo run -- -h`
 
 ### To Do
 
