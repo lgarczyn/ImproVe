@@ -43,11 +43,6 @@ fn main() {
     // The channel to send data from audio thread to fourier thread
     let (sender, receiver) = channel::<Vec<f32>>();
 
-    // Await user input
-    println!("Press enter/return to start reading frequencies ...");
-    let mut user_input = String::new();
-    io::stdin().read_line(&mut user_input).ok();
-
     // Spawn the audio input reading thread
     std::thread::spawn(move || {
         event_loop.run(move |_, data| {
