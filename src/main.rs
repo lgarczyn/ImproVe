@@ -24,6 +24,7 @@ use cpal::UnknownTypeInputBuffer::{F32, I16, U16};
 use clap::{Arg, App};
 
 mod dissonance;
+mod audio_buffer;
 
 fn main() {
     // Parse args
@@ -38,9 +39,9 @@ fn main() {
             .help("Width of audio data analyzed every step\n\
                   Higher values 'blur' the audio over time\n\
                   Higher values can have a significant performance cost\n\
-                  Powers of two are faster\n")
+                  Powers of two are significantly faster\n")
             .next_line_help(true)
-            .default_value("32")
+            .default_value("8192")
             .validator(|s| match s.parse::<u32>() {
                 Ok(_) => Ok(()),
                 Err(_) => Err("Argument is not an unsigned int".to_owned())
@@ -53,13 +54,14 @@ fn main() {
             .next_line_help(true)
             .possible_values(&["e", "r"])
             .default_value("e"))
-        .arg(Arg::with_name("input")
-            .short("i")
-            .long("input")
-            .value_name("DEVICE")
-            .help("The id of the audio input you wish to use\n")
-            .next_line_help(true)
-            .takes_value(true))
+        // removes because causes cpal to crash :c
+        // .arg(Arg::with_name("input")
+        //     .short("i")
+        //     .long("input")
+        //     .value_name("DEVICE")
+        //     .help("The id of the audio input you wish to use\n")
+        //     .next_line_help(true)
+        //     .takes_value(true))
         .get_matches();
     
     // Get notation convention
@@ -132,36 +134,28 @@ fn fourier_thread(
     resolution: usize) {
     // The FFT pool, allows for optimized yet flexible data sizes
     let mut planner = FFTplanner::<f32>::new(false);
-    // The data queue, allows us to only apply the FFT to the most recent data
-    // Could eventually be moved to a ring buffer
-    let mut queue = std::collections::VecDeque::new();
+    // The audio buffer, to always get N elements
+    let mut buffer = audio_buffer::AudioBuffer::new(receiver);
 
+    // Get the first first few seconds of recording
+    println!("Gathering noise profile");
+    let vec = buffer.take(resolution);
+    // Extract frequencies to serve as mask
+    let mask = fourier_analysis(&vec[..], &mut planner, None);
+
+    // Fill the analysis buffer again
+    // println!("Gathering input for analysis");    
+    //TODO: implement input overlap again
+
+    // Start analysis loop
+    println!("Starting analysis");
     loop {
         // Aggregate all pending input
-        for input in receiver.try_iter() {
-            // Get rid of old input first
-            if queue.len() >= resolution
-            {
-                queue.pop_back();
-            }
-            // Push new input
-            queue.push_front(input);
-        }
-        // If not enough input was aggregated, wait and try again
-        if queue.len() < resolution {
-            queue.push_front(receiver.recv().unwrap());
-            continue;
-        }
-        assert!(queue.len() == resolution);
-        // Concatenate audio buffers, in order
-        let mut vec: Vec<f32> = vec![];
-        for input in queue.iter().rev() {
-            vec.extend(input);
-        }
+        let vec = buffer.take(resolution);
         // Apply fft and extract frequencies
-        let vec = fourier_analysis(&vec[..], &mut planner, None); // Some(&mask));
+        let fourier = fourier_analysis(&vec[..], &mut planner, Some(&mask));
         // Calculate dissonance of each note
-        let scores = calculate_scores(vec);
+        let scores = calculate_scores(fourier);
         // Display scores accordingly
         display_guitar(scores, notation);
     }
@@ -174,7 +168,7 @@ fn fourier_thread(
 fn fourier_analysis(
     vec: &[f32],
     planner: &mut FFTplanner<f32>,
-    mask: Option<&Vec<f32>>,
+    mask: Option<&Vec<Complex<f32>>>,
 ) -> Vec<Complex<f32>> {
     // Setup fft parameters
     let len = vec.len();
@@ -199,18 +193,18 @@ fn fourier_analysis(
         c.re = i as f32 * 48000f32 / len as f32;
         // Noise masking, currently unused
         if let Some(vec) = mask {
-            if c.im > vec[i] {
-                c.im -= vec[i];
+            if c.im > vec[i - 1].im {
+                c.im -= vec[i - 1].im;
             } else {
                 c.im = 0f32;
             }
         }
         // Reducing intensity of frequencies out of human hearing range
-        c.im *= a_weigh_frequency(c.re);
+        c.im *= a_weigh_frequency(c.re).powi(2);
     }
 
     // Sort by intensity
-    fft_out.sort_by(|b, a| a.im.partial_cmp(&b.im).unwrap());
+    //fft_out.sort_by(|b, a| a.im.partial_cmp(&b.im).unwrap());
 
     // print 9 most intense frequencies (you'll never believe number 4)
     // for &Complex{re:a, im:b} in fft_out.iter().take(9)
