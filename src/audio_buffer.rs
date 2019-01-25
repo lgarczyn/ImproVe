@@ -1,27 +1,56 @@
 use std::sync::mpsc::Receiver;
-use std::iter::Empty;
+use std::collections::VecDeque;
+
+#[derive(Default)]
+pub struct BufferOptions
+{
+    pub resolution:usize,
+    pub discard:bool,
+    pub overlap:bool,
+}
 
 pub struct AudioBuffer {
-	buffer:Vec<f32>,
+	options:BufferOptions,
+	buffer:VecDeque<f32>,
 	receiver:Receiver<Vec<f32>>,
 }
 
 impl AudioBuffer {
-	pub fn new(receiver:Receiver<Vec<f32>>) -> AudioBuffer {
+	pub fn new(receiver:Receiver<Vec<f32>>, options:BufferOptions) -> AudioBuffer {
 		AudioBuffer {
+			buffer: VecDeque::with_capacity(options.resolution),
 			receiver,
-			buffer: vec![],
+			options,
 		}
 	}
 
-	pub fn take(&mut self, n:usize) -> Vec<f32>
+	// Return n elements, n being options.resolution
+	// If options.discard is true, overwrite old elements
+	// If options.overlap is true, don't delete read elements
+	pub fn take(&mut self) -> Vec<f32>
 	{
-		//Extend buffer until len is at least equal to n
-		while self.buffer.len() < n
-		{
+		// Set n as the previously received packet resolution
+		let n = self.options.resolution;
+		// Read all waiting packets
+		for packet in self.receiver.try_iter() {
+			self.buffer.extend(packet);
+		}
+		// Make sure buffer contains at least n elements
+		while self.buffer.len() < n {
 			self.buffer.extend(self.receiver.recv().unwrap());
 		}
-		//return the first n elements, and remove them from the buffer
-		self.buffer.splice(..n, Empty::default()).collect()
+		// If discard is on, discard surplus data
+		if self.options.discard && self.buffer.len() > n {
+			self.buffer.drain(0 .. self.buffer.len() - n);
+		}
+		// If overlap is allowed, return n oldest elements, and only delete those over the limit
+		if self.options.overlap {
+			let ret = self.buffer.iter().cloned().take(n).collect();
+			self.buffer.drain(0 .. n);
+			ret
+		// If overlap is not allowed, remove them before returning
+		} else {
+			self.buffer.drain(0 .. n).collect()
+		}
 	}
 }

@@ -1,6 +1,5 @@
 // Standard
 use std::sync::mpsc::channel;
-use std::sync::mpsc::Receiver;
 use std::thread;
 use std::vec;
 use std::io;
@@ -23,8 +22,10 @@ use cpal::UnknownTypeInputBuffer::{F32, I16, U16};
 // Parser
 use clap::{Arg, App};
 
+// Project
 mod dissonance;
 mod audio_buffer;
+use self::audio_buffer::{AudioBuffer, BufferOptions};
 
 fn main() {
     // Parse args
@@ -62,8 +63,15 @@ fn main() {
         //     .help("The id of the audio input you wish to use\n")
         //     .next_line_help(true)
         //     .takes_value(true))
+        .arg(Arg::with_name("discard")
+            .short("d")
+            .long("discard")
+            .help("Allows the program to discard data if latency is too high\n"))
+        .arg(Arg::with_name("overlap")
+            .short("o")
+            .long("overlap")
+            .help("Allows the program to reuse data if the latency is too low\n"))
         .get_matches();
-    
     // Get notation convention
     let notation = match matches.value_of("notation").unwrap()
     {
@@ -71,8 +79,14 @@ fn main() {
         _ => NOTE_NAMES_ROMANCE,
     };
 
-    // Get number of packets to read in a single FFT
-    let resolution = matches.value_of("resolution").unwrap().parse::<u32>().unwrap();
+    let mut options = BufferOptions::default();
+
+    // Get number of values to read in a single FFT
+    options.resolution = matches.value_of("resolution").unwrap().parse::<usize>().unwrap();
+    // Check if values can be discarded if input is too fast
+    options.discard = matches.is_present("discard");
+    // Check if values can be analyzed multiple times if input is too slow
+    options.overlap = matches.is_present("overlap");
 
     // Get the desired input device, default or otherwise
     let device = match matches.value_of("input")
@@ -102,6 +116,8 @@ fn main() {
 
     // The channel to send data from audio thread to fourier thread
     let (sender, receiver) = channel::<Vec<f32>>();
+    // The audio buffer to get the audio data in appropriately sized packets
+    let buffer = AudioBuffer::new(receiver, options);
 
     // Spawn the audio input reading thread
     std::thread::spawn(move || {
@@ -119,7 +135,7 @@ fn main() {
     });
 
     // Spawn the audio analysis thread
-    thread::spawn(move || fourier_thread(receiver, notation, resolution as usize));
+    thread::spawn(move || fourier_thread(buffer, notation));
 
     // Wait for user input to quit
     println!("Press enter/return to quit...");
@@ -129,29 +145,24 @@ fn main() {
 
 // Receives audio input, start FFT on most recent data and display results
 fn fourier_thread(
-    receiver: Receiver<Vec<f32>>,
-    notation: [&str; 12],
-    resolution: usize) {
+    buffer:AudioBuffer,
+    notation: [&str; 12]) {
     // The FFT pool, allows for optimized yet flexible data sizes
     let mut planner = FFTplanner::<f32>::new(false);
-    // The audio buffer, to always get N elements
-    let mut buffer = audio_buffer::AudioBuffer::new(receiver);
+    // The audio buffer, to get uniformly-sized audio packets
+    let mut buffer = buffer;
 
     // Get the first first few seconds of recording
     println!("Gathering noise profile");
-    let vec = buffer.take(resolution);
+    let vec = buffer.take();
     // Extract frequencies to serve as mask
     let mask = fourier_analysis(&vec[..], &mut planner, None);
-
-    // Fill the analysis buffer again
-    // println!("Gathering input for analysis");    
-    //TODO: implement input overlap again
 
     // Start analysis loop
     println!("Starting analysis");
     loop {
         // Aggregate all pending input
-        let vec = buffer.take(resolution);
+        let vec = buffer.take();
         // Apply fft and extract frequencies
         let fourier = fourier_analysis(&vec[..], &mut planner, Some(&mask));
         // Calculate dissonance of each note
@@ -258,9 +269,12 @@ fn calculate_scores(frequencies: Vec<Complex<f32>>) -> [f32; NOTE_COUNT] {
         max = max.max(score);
         scores[i] = score;
     }
+    // Get amplitude to normalize
+    // Set a min value of 5000 to avoid amplifying noise
+    let amplitude = (max - min);//.max(5000f32);
     // Normalize score
     for score in scores.iter_mut() {
-        *score = (*score - min) / (max - min);
+        *score = (*score - min) / amplitude;
         *score = score.powf(0.5f32);
     }
     scores
