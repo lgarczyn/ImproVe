@@ -2,12 +2,9 @@
 use std::sync::mpsc::channel;
 use std::thread;
 use std::vec;
-use std::io;
-use std::io::BufWriter;
-use std::io::Write;
+use std::io::stdin;
 
 // Tools
-use clampf::clamp;
 use itertools::Itertools;
 
 // Math
@@ -25,7 +22,10 @@ use clap::{Arg, App};
 // Project
 mod dissonance;
 mod audio_buffer;
+mod display;
+mod scores;
 use self::audio_buffer::{AudioBuffer, BufferOptions};
+use self::display::{guitar, DisplayOptions};
 
 fn main() {
     // Parse args
@@ -44,7 +44,8 @@ fn main() {
             .next_line_help(true)
             .default_value("8192")
             .validator(|s| match s.parse::<u32>() {
-                Ok(_) => Ok(()),
+                Ok(32 ..= 1048576) => Ok(()),
+                Ok(_) => Err("Argument out of range: (32 .. 1048576)".to_owned()),
                 Err(_) => Err("Argument is not an unsigned int".to_owned())
             }))
         .arg(Arg::with_name("notation")
@@ -71,22 +72,32 @@ fn main() {
             .short("o")
             .long("overlap")
             .help("Allows the program to reuse data if the latency is too low\n"))
+        .arg(Arg::with_name("noclear")
+            .short("c")
+            .long("noclear")
+            .help("Prevents the program from attempting to clear the terminal\n"))
         .get_matches();
     // Get notation convention
     let notation = match matches.value_of("notation").unwrap()
     {
-        "e" => NOTE_NAMES_ENGLISH,
-        _ => NOTE_NAMES_ROMANCE,
+        "e" => display::Notation::English,
+        _ => display::Notation::Romance,
+    };
+    // Get display options object
+    let disp_opt = DisplayOptions{
+        notation,
+        clear_term:!matches.is_present("noclear"),
+        instrument:()
     };
 
-    let mut options = BufferOptions::default();
+    let mut buf_opt = BufferOptions::default();
 
     // Get number of values to read in a single FFT
-    options.resolution = matches.value_of("resolution").unwrap().parse::<usize>().unwrap();
+    buf_opt.resolution = matches.value_of("resolution").unwrap().parse::<usize>().unwrap();
     // Check if values can be discarded if input is too fast
-    options.discard = matches.is_present("discard");
+    buf_opt.discard = matches.is_present("discard");
     // Check if values can be analyzed multiple times if input is too slow
-    options.overlap = matches.is_present("overlap");
+    buf_opt.overlap = matches.is_present("overlap");
 
     // Get the desired input device, default or otherwise
     let device = match matches.value_of("input")
@@ -117,7 +128,7 @@ fn main() {
     // The channel to send data from audio thread to fourier thread
     let (sender, receiver) = channel::<Vec<f32>>();
     // The audio buffer to get the audio data in appropriately sized packets
-    let buffer = AudioBuffer::new(receiver, options);
+    let buffer = AudioBuffer::new(receiver, buf_opt);
 
     // Spawn the audio input reading thread
     std::thread::spawn(move || {
@@ -135,18 +146,17 @@ fn main() {
     });
 
     // Spawn the audio analysis thread
-    thread::spawn(move || fourier_thread(buffer, notation));
+    thread::spawn(move || fourier_thread(buffer, disp_opt));
 
     // Wait for user input to quit
     println!("Press enter/return to quit...");
-    let mut user_input = String::new();
-    io::stdin().read_line(&mut user_input).ok();
+    stdin().read_line(&mut String::new()).ok();
 }
 
 // Receives audio input, start FFT on most recent data and display results
 fn fourier_thread(
     buffer:AudioBuffer,
-    notation: [&str; 12]) {
+    display_options:DisplayOptions) {
     // The FFT pool, allows for optimized yet flexible data sizes
     let mut planner = FFTplanner::<f32>::new(false);
     // The audio buffer, to get uniformly-sized audio packets
@@ -166,15 +176,11 @@ fn fourier_thread(
         // Apply fft and extract frequencies
         let fourier = fourier_analysis(&vec[..], &mut planner, Some(&mask));
         // Calculate dissonance of each note
-        let scores = calculate_scores(fourier);
+        let scores = scores::calculate(fourier);
         // Display scores accordingly
-        display_guitar(scores, notation);
+        guitar(scores, display_options);
     }
 }
-
-// fn display_controls() {
-//     println!("[q] [←] [→] [l] [h]");
-// }
 
 fn fourier_analysis(
     vec: &[f32],
@@ -241,82 +247,3 @@ fn a_weigh_frequency(freq: f32) -> f32 {
     1.2589f32 * num / den
 }
 
-const NOTE_NAMES_ENGLISH: [&str; 12] = [
-    " C ", " C#", " D ", " D#", " E ", " F ", " F#", " G ", " G#", " A ", " A#", " B ",
-];
-const NOTE_NAMES_ROMANCE: [&str; 12] = [
-    "Do ", "Do#", "Ré ", "Ré#", "Mi ", "Fa ", "Fa#", "Sol", "So#", "La ", "La#", "Si ",
-];
-const NOTE_COUNT: usize = 89;
-const BASE_NOTE: usize = 12 * 4 + 10; // C1 + 4 octaves + 10 == A4
-const BASE_FREQUENCY: f32 = 440f32; // Frequency of A4
-
-fn calculate_scores(frequencies: Vec<Complex<f32>>) -> [f32; NOTE_COUNT] {
-    let mut scores = [0f32; NOTE_COUNT];
-    let mut min = std::f32::INFINITY;
-    let mut max = std::f32::NEG_INFINITY;
-
-    // For every note, calculate dissonance score
-    for i in 0 .. NOTE_COUNT {
-        let mut score = 0f32;
-        let diff_a: i32 = i as i32 - BASE_NOTE as i32;
-        let hz = BASE_FREQUENCY * 2f32.powf(diff_a as f32 / 12f32);
-        // For Complex{re:a, im:b} in [220, 440, 880].iter().map(|&hz| Complex{re:hz as f32, im:100f32})
-        for &Complex { re: a, im: b } in frequencies.iter() {
-            score += dissonance::estimate(a, hz) * b;
-        }
-        min = min.min(score);
-        max = max.max(score);
-        scores[i] = score;
-    }
-    // Get amplitude to normalize
-    // Set a min value of 5000 to avoid amplifying noise
-    let amplitude = (max - min);//.max(5000f32);
-    // Normalize score
-    for score in scores.iter_mut() {
-        *score = (*score - min) / amplitude;
-        *score = score.powf(0.5f32);
-    }
-    scores
-}
-
-const GUITAR_STRING_LENGTH: usize = 44;
-const GUITAR_STRINGS: [usize; 6] = [16 + 0, 16 + 5, 16 + 10, 16 + 15, 16 + 19, 16 + 24];
-
-fn display_guitar(scores: [f32; NOTE_COUNT], notation:[&str; 12]) {
-    // Clear the terminal
-    // crossterm::terminal::terminal().clear(crossterm::terminal::ClearType::All).unwrap();
-    // Create buffer to avoid flicker
-    let mut buffer = BufWriter::new(io::stdout());
-
-    write!(&mut buffer, "\n 0 |").unwrap();
-
-    for i in 1 .. GUITAR_STRING_LENGTH {
-        write!(&mut buffer, "{:^3}", i).unwrap();
-    }
-    write!(&mut buffer, "\n").unwrap();
-
-    // For every guitar strings
-    for &j in GUITAR_STRINGS.iter().rev() {
-        // For every note on that string
-        for i in j..j + GUITAR_STRING_LENGTH {
-            // Get note name and calculated score
-            let name = notation[i % 12];
-            let score = scores[i];
-            // Write the name with the appropriate color
-            let gradient = (clamp(score) * 255f32) as u8;
-            write!(&mut buffer, "\x1b[30;48;2;{red};{green};{blue}m{name}",
-                red = gradient,
-                green = (255 - gradient),
-                blue = gradient / 4,
-                name = name
-            ).unwrap();
-            // Add the bar to differentiate the zero 'fret' from the rest
-            if i == j {
-                write!(&mut buffer, "\x1b[0;0m|").unwrap();
-            }
-        }
-        writeln!(&mut buffer, "\x1b[0;0m").unwrap();
-    }
-    buffer.flush().unwrap();
-}
