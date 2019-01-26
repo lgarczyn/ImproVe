@@ -12,7 +12,7 @@ Currently, it gives you a somewhat accurate fretboard-looking suggestion thing.
 
 ## Requirements
 
-You need a modern terminal, with true-colour support. Apart from that, this should run on anything with enough power. The clear-screen signal is currently terminal specific, but not eactly needed.
+You need a modern terminal, with true-colour support. Apart from that, this should run on anything with enough power. The clear-screen signal is currently terminal specific, but not exactly needed.
 
 If you get the "Package alsa was not found in the pkg-config search path." on build,
 install 'libasound2-dev'
