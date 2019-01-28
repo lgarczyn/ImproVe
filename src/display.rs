@@ -2,7 +2,6 @@ use crate::scores::NOTE_COUNT;
 use std::io::BufWriter;
 use std::io::Write;
 use std::io;
-use clampf::clamp;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Notation {
@@ -36,7 +35,7 @@ pub struct DisplayOptions {
 const GUITAR_STRING_LENGTH: usize = 44;
 const GUITAR_STRINGS: [usize; 6] = [16 + 0, 16 + 5, 16 + 10, 16 + 15, 16 + 19, 16 + 24];
 
-pub fn guitar(scores: [f32; NOTE_COUNT], options:DisplayOptions) {
+pub fn guitar(scores: &[f32; NOTE_COUNT], options:DisplayOptions) {
     // Clear the terminal
     // crossterm::terminal::terminal().clear(crossterm::terminal::ClearType::All).unwrap();
     // Create buffer to avoid flicker
@@ -61,8 +60,9 @@ pub fn guitar(scores: [f32; NOTE_COUNT], options:DisplayOptions) {
             // Get note name and calculated score
             let name = options.notation.get_names()[i % 12];
             let score = scores[i];
+            let score = score.max(0f32).min(1f32);
             // Write the name with the appropriate color
-            let gradient = (clamp(score) * 255f32) as u8;
+            let gradient = (score * 255f32) as u8;
             write!(&mut buffer, "\x1b[30;48;2;{red};{green};{blue}m{name}",
                 red = gradient,
                 green = (255 - gradient),

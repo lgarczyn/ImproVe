@@ -155,7 +155,7 @@ fn fourier_thread(
     // The audio buffer, to get uniformly-sized audio packets
     let mut buffer = buffer;
     // The SDL window wrapper to draw stuff
-    let mut disp = DisplaySDL::new(&sdl);
+    let mut disp = DisplaySDL::new(&sdl, display_options);
 
     // Get the first first few seconds of recording
     println!("Gathering noise profile");
@@ -177,7 +177,9 @@ fn fourier_thread(
         // Calculate dissonance of each note
         let scores = scores::calculate(fourier);
         // Display scores accordingly
-        guitar(scores, display_options);
+        guitar(&scores, display_options);
+        // Display the scores on SDL
+        disp.draw_notes(&scores);
 
         // Check for quit events
 		for event in events.poll_iter() {
