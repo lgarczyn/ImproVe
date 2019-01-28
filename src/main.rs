@@ -106,6 +106,8 @@ fn main() -> Result<(), String> {
     // Get the SDL objects
     let sdl_context = sdl2::init()?;
     let audio_subsystem = sdl_context.audio()?;
+    println!("Capture Driver = {}", audio_subsystem.current_audio_driver());
+    println!("Capture Spec = {:?}", audio_subsystem.audio_playback_device_name(0));
 
     // Set the desired specs
     let desired_spec = AudioSpecDesired {
@@ -139,7 +141,7 @@ impl AudioCallback for Recorder {
     type Channel = f32;
 
     fn callback(&mut self, input: &mut [f32]) {
-        self.sender.send(input.to_owned()).unwrap();
+        self.sender.send(input.to_owned()).ok();
     }
 }
 
