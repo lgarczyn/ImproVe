@@ -46,7 +46,12 @@ impl AudioBuffer {
 		// If overlap is allowed, return n oldest elements, and only delete those over the limit
 		if self.options.overlap {
 			let ret = self.buffer.iter().cloned().take(n).collect();
-			self.buffer.drain(0 .. n);
+			// Calculate unneeded data for next batch
+			let surplus = self.buffer.len() - n;
+			// Cap surplus at n to avoid ignoring data
+			let surplus = surplus.min(n);
+			// Delete surplus data
+			self.buffer.drain(0 .. surplus);
 			ret
 		// If overlap is not allowed, remove them before returning
 		} else {

@@ -1,8 +1,6 @@
 // Standard
-use std::sync::mpsc::channel;
-use std::thread;
+use std::sync::mpsc::{channel, Sender};
 use std::vec;
-use std::io::stdin;
 
 // Tools
 use itertools::Itertools;
@@ -11,13 +9,14 @@ use itertools::Itertools;
 use rustfft::num_complex::Complex;
 use rustfft::FFTplanner;
 
-// Audio
-use cpal::Sample;
-use cpal::StreamData::Input;
-use cpal::UnknownTypeInputBuffer::{F32, I16, U16};
-
 // Parser
 use clap::{Arg, App};
+
+// SDL2
+use sdl2::audio::{AudioCallback, AudioSpecDesired};
+use sdl2::Sdl;
+use sdl2::event::Event;
+use sdl2::keyboard::Keycode;
 
 // Project
 mod dissonance;
@@ -27,8 +26,9 @@ mod display_sdl;
 mod scores;
 use self::audio_buffer::{AudioBuffer, BufferOptions};
 use self::display::{guitar, DisplayOptions};
+use self::display_sdl::DisplaySDL;
 
-fn main() {
+fn main() -> Result<(), String> {
     // Parse args
     let matches = App::new("ImproVe")
         .version("0.1")
@@ -84,15 +84,15 @@ fn main() {
         "e" => display::Notation::English,
         _ => display::Notation::Romance,
     };
-    // Get display options object
+    // Get display option
     let disp_opt = DisplayOptions{
         notation,
         clear_term:!matches.is_present("noclear"),
         instrument:()
     };
 
+    // Get audio buffering options
     let mut buf_opt = BufferOptions::default();
-
     // Get number of values to read in a single FFT
     buf_opt.resolution = matches.value_of("resolution").unwrap().parse::<usize>().unwrap();
     // Check if values can be discarded if input is too fast
@@ -100,63 +100,60 @@ fn main() {
     // Check if values can be analyzed multiple times if input is too slow
     buf_opt.overlap = matches.is_present("overlap");
 
-    // Get the desired input device, default or otherwise
-    let device = match matches.value_of("input")
-    {
-        None => cpal::default_input_device()
-            .expect("Failed to get default input device"),
-        Some(s) => cpal::input_devices()
-            .filter(|d| d.name() == s)
-            .next()
-            .expect(&format!("Could not find device named '{}'. Here's the list of available devices: {}.",
-                s, cpal::input_devices().map(|d| d.name()).join(", ")))
-    };
-    println!("Default input device: {}", device.name());
-
-    // Get the default sound input format
-    let format = device
-        .default_input_format()
-        .expect("Failed to get default input format");
-    println!("Default input format: {:?}", format);
-
-    // Start the cpal input stream
-    let event_loop = cpal::EventLoop::new();
-    let stream_id = event_loop
-        .build_input_stream(&device, &format)
-        .expect("Failed to build input stream");
-    event_loop.play_stream(stream_id);
-
-    // The channel to send data from audio thread to fourier thread
+    // The channel to get data from audio callback
     let (sender, receiver) = channel::<Vec<f32>>();
-    // The audio buffer to get the audio data in appropriately sized packets
+
+    // Get the SDL objects
+    let sdl_context = sdl2::init()?;
+    let audio_subsystem = sdl_context.audio()?;
+
+    // Set the desired specs
+    let desired_spec = AudioSpecDesired {
+        freq: None,
+        channels: Some(1),
+        samples: None
+    };
+
+    // Build the callback object and start recording
+    let capture_device = audio_subsystem.open_capture(None, &desired_spec, |spec| {
+        println!("Capture Spec = {:?}", spec);
+        Recorder { sender }
+    })?;
+
+    capture_device.resume();
+
+    // Build audio receiver and aggrgator
     let buffer = AudioBuffer::new(receiver, buf_opt);
 
-    // Spawn the audio input reading thread
-    std::thread::spawn(move || {
-        event_loop.run(move |_, data| {
-            // Otherwise send input data to fourier thread
-            if let Input { buffer: input_data } = data {
-                let float_buffer = match input_data {
-                    U16(buffer) => buffer.iter().map(|u| u.to_f32()).collect_vec(),
-                    I16(buffer) => buffer.iter().map(|i| i.to_f32()).collect_vec(),
-                    F32(buffer) => buffer.to_vec(),
-                };
-                sender.send(float_buffer).unwrap();
-            }
-        });
-    });
+    // Start the data analysis
+    fourier_thread(buffer, sdl_context, disp_opt);
+    Ok(())
+}
 
-    fourier_thread(buffer, disp_opt);
+// Audio callback object, simply allocates and transfers to a sender
+struct Recorder {
+    sender: Sender<Vec<f32>>,
+}
+
+impl AudioCallback for Recorder {
+    type Channel = f32;
+
+    fn callback(&mut self, input: &mut [f32]) {
+        self.sender.send(input.to_owned()).unwrap();
+    }
 }
 
 // Receives audio input, start FFT on most recent data and display results
 fn fourier_thread(
     buffer:AudioBuffer,
+    sdl:Sdl,
     display_options:DisplayOptions) {
     // The FFT pool, allows for optimized yet flexible data sizes
     let mut planner = FFTplanner::<f32>::new(false);
     // The audio buffer, to get uniformly-sized audio packets
     let mut buffer = buffer;
+    // The SDL window wrapper to draw stuff
+    let mut disp = DisplaySDL::new(&sdl);
 
     // Get the first first few seconds of recording
     println!("Gathering noise profile");
@@ -164,7 +161,7 @@ fn fourier_thread(
     // Extract frequencies to serve as mask
     let mask = fourier_analysis(&vec[..], &mut planner, None);
 
-    let mut drawer = display_sdl::DisplaySDL::new();
+    let mut events = sdl.event_pump().unwrap();
 
     // Start analysis loop
     println!("Starting analysis");
@@ -173,11 +170,23 @@ fn fourier_thread(
         let vec = buffer.take();
         // Apply fft and extract frequencies
         let fourier = fourier_analysis(&vec[..], &mut planner, Some(&mask));
-        drawer.draw_fourier(&fourier);
+        // Draw the fourier transform for info.
+        disp.draw_fourier(&fourier);
         // Calculate dissonance of each note
         let scores = scores::calculate(fourier);
         // Display scores accordingly
         guitar(scores, display_options);
+
+        // Check for quit events
+		for event in events.poll_iter() {
+			match event {
+				Event::Quit {..} |
+				Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
+					return;
+				},
+				_ => {}
+			}
+		}
     }
 }
 
