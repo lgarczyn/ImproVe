@@ -20,14 +20,11 @@ On the other hand, because the analysis is still a couple levels of abstractions
 
 You need a modern terminal, with true-colour support. Apart from that, this should run on anything with enough power. The clear-screen signal is currently terminal specific, but not exactly needed.
 
-If you get the "Package alsa was not found in the pkg-config search path." on build,
-install 'libasound2-dev'
+The only dependendy is SDL2 (libsdl2-dev for linux).
 
 You also need cargo, but that's a bit of a given for any rust project.
 
 Run with `cargo run`, help with `cargo run -- -h`
-
-The CPAL library can cause some crashes
 
 ### To Do
 
