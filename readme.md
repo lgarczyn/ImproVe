@@ -36,3 +36,4 @@ The CPAL library can cause some crashes
 * Audio feedback mode ?
 * Try adding a better dissonance model, using a sample of the targeted instrument
 * other displays than guitar
+* different display modes with matching features

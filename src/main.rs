@@ -23,6 +23,7 @@ use clap::{Arg, App};
 mod dissonance;
 mod audio_buffer;
 mod display;
+mod display_sdl;
 mod scores;
 use self::audio_buffer::{AudioBuffer, BufferOptions};
 use self::display::{guitar, DisplayOptions};
@@ -145,12 +146,7 @@ fn main() {
         });
     });
 
-    // Spawn the audio analysis thread
-    thread::spawn(move || fourier_thread(buffer, disp_opt));
-
-    // Wait for user input to quit
-    println!("Press enter/return to quit...");
-    stdin().read_line(&mut String::new()).ok();
+    fourier_thread(buffer, disp_opt);
 }
 
 // Receives audio input, start FFT on most recent data and display results
@@ -168,6 +164,8 @@ fn fourier_thread(
     // Extract frequencies to serve as mask
     let mask = fourier_analysis(&vec[..], &mut planner, None);
 
+    let mut drawer = display_sdl::DisplaySDL::new();
+
     // Start analysis loop
     println!("Starting analysis");
     loop {
@@ -175,6 +173,7 @@ fn fourier_thread(
         let vec = buffer.take();
         // Apply fft and extract frequencies
         let fourier = fourier_analysis(&vec[..], &mut planner, Some(&mask));
+        drawer.draw_fourier(&fourier);
         // Calculate dissonance of each note
         let scores = scores::calculate(fourier);
         // Display scores accordingly
