@@ -5,8 +5,13 @@ pub const NOTE_COUNT: usize = 89;
 pub const BASE_NOTE: usize = 12 * 4 + 10; // C1 + 4 octaves + 10 == A4
 pub const BASE_FREQUENCY: f32 = 440f32; // Frequency of A4
 
-pub fn calculate(frequencies: Vec<Complex<f32>>) -> [f32; NOTE_COUNT] {
-    let mut scores = [0f32; NOTE_COUNT];
+pub struct Scores {
+    pub notes:[f32; NOTE_COUNT],
+    pub fourier: Vec<Complex<f32>>,
+}
+
+pub fn calculate(frequencies: Vec<Complex<f32>>) -> Scores {
+    let mut notes = [0f32; NOTE_COUNT];
     let mut min = std::f32::INFINITY;
     let mut max = std::f32::NEG_INFINITY;
 
@@ -21,15 +26,15 @@ pub fn calculate(frequencies: Vec<Complex<f32>>) -> [f32; NOTE_COUNT] {
         }
         min = min.min(score);
         max = max.max(score);
-        scores[i] = score;
+        notes[i] = score;
     }
     // Get amplitude to normalize
     // Set a min value of 5000 to avoid amplifying noise
     let amplitude = max - min;//).max(5000f32);
     // Normalize score
-    for score in scores.iter_mut() {
+    for score in notes.iter_mut() {
         *score = (*score - min) / amplitude;
         *score = score.powf(0.5f32);
     }
-    scores
+    Scores{notes, fourier:frequencies}
 }

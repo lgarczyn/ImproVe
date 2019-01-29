@@ -1,130 +1,197 @@
-// A wrapper for SDL display
+// The SDL display loop
+
+use std::sync::mpsc::Receiver;
+
+use itertools::Itertools;
 
 use sdl2::Sdl;
-use sdl2::render::WindowCanvas;
 use sdl2::pixels::Color;
 use sdl2::rect::Point;
 use sdl2::rect::Rect;
 use sdl2::video::WindowPos;
-use rustfft::num_complex::Complex;
+use sdl2::video::Window;
+use sdl2::render::Canvas;
+use sdl2::render::Texture;
+use sdl2::event::Event;
+use sdl2::keyboard::Keycode;
 
-use crate::scores::NOTE_COUNT;
+use crate::scores::Scores;
+use crate::display::DisplayOptions;
 
-pub struct DisplaySDL {
-	canvas_fourier:WindowCanvas,
-	canvas_board:WindowCanvas,
-	options:crate::display::DisplayOptions,
-}
+// Guitar constants
 
-const FOURIER_HEIGHT:u32 = 200;
-const FOURIER_WIDTH:u32 = 1024;
-
+// The note for every guitar strings, from E2 to E4
 const STRINGS: [usize; 6] = [16 + 0, 16 + 5, 16 + 10, 16 + 15, 16 + 19, 16 + 24];
 
+// Dimensions in pixels for every fretboard elements
 const STRING_HEIGHT:u32 = 18;
 const STRING_COUNT:u32 = 6;
 const FRET_WIDTH:u32 = 27;
 const FRET_COUNT:u32 = 44;
-const FRET_LINE:u32 = 5;
+const FRET_LINE:u32 = 9;
+const FONT_HEIGHT:u16 = STRING_HEIGHT as u16 - 1;
 
-const SQUARE:(u32, u32) = (FRET_WIDTH, STRING_HEIGHT);
+// Font asset
+const FONT_NAME:&str = "assets/UbuntuMono-R.ttf";
 
+// Board graph window dimensions
 const BOARD_HEIGHT:u32 = (STRING_COUNT + 1) * STRING_HEIGHT;
 const BOARD_WIDTH:u32 = (FRET_COUNT) * FRET_WIDTH + FRET_LINE;
 
-impl DisplaySDL {
+// Fourier graph dimensions
+const FOURIER_HEIGHT:u32 = 200;
+const FOURIER_WIDTH:u32 = 1024;
 
-	// Create new SDL window
-	pub fn new(sdl:&Sdl, options:crate::display::DisplayOptions) -> DisplaySDL {
-    	let video_subsystem = sdl.video().unwrap();
+// The display loop, receives data from the fourier thread
+// Hard to abstract further because of rust-sdl safety guards
+pub fn display(sdl:Sdl, receiver:Receiver<Scores>, options:DisplayOptions) -> Result<(), String> {
+
+	// Open windows
+
+    let video_subsystem = sdl.video().unwrap();
  
-    	let mut window = video_subsystem.window("ImproVe Fourier", FOURIER_WIDTH, FOURIER_HEIGHT)
-			.position_centered()
-			.build()
-			.unwrap();
-		let pos = window.position();
-		window.set_position(
-			WindowPos::Centered,
-			WindowPos::Positioned(pos.1 - BOARD_HEIGHT as i32 - 100));
- 
-    	let canvas_fourier = window.into_canvas().build().unwrap();
- 
-    	let window = video_subsystem.window("ImproVe Fretboard", BOARD_WIDTH, BOARD_HEIGHT)
-			.position_centered()
-			.build()
-			.unwrap();
- 
-    	let canvas_board = window.into_canvas().build().unwrap();
+    let mut window = video_subsystem.window("ImproVe Fourier", FOURIER_WIDTH, FOURIER_HEIGHT)
+        .position_centered()
+        .build()
+        .unwrap();
+    let pos = window.position();
+    window.set_position(
+        WindowPos::Centered,
+        WindowPos::Positioned(pos.1 - BOARD_HEIGHT as i32 - 100));
 
-		DisplaySDL {
-			canvas_fourier,
-			canvas_board,
-			options
-		}
-	}
+    let mut canvas_fourier = window.into_canvas().build().unwrap();
 
-	pub fn draw_fourier(&mut self, fourier:&Vec<Complex<f32>>) {
+    let window = video_subsystem.window("ImproVe Fretboard", BOARD_WIDTH, BOARD_HEIGHT)
+        .position_centered()
+        .build()
+        .unwrap();
 
-		let canvas = &mut self.canvas_fourier;
+    let mut canvas_board = window.into_canvas().build().unwrap();
 
-		canvas.set_draw_color(Color::RGB(0, 0, 0));
+	canvas_board.clear();
+	canvas_fourier.clear();
 
-		canvas.clear();
+	// Build text textures, for use in the loop
 
-		canvas.set_draw_color(Color::RGB(255, 255, 255));
+	// Init the front
+    let ttf_context = sdl2::ttf::init().unwrap();
+    let texture_creator = canvas_board.texture_creator();
+    let font = ttf_context.load_font(FONT_NAME, FONT_HEIGHT).unwrap();
+    
+	// Build a texture for every note names
+    let textures = options.notation.get_names().iter().map(|name| {
+        let surface = font.render(name)
+            .blended(Color::RGBA(30, 30, 30, 255))
+            .unwrap();
+        let texture = texture_creator
+            .create_texture_from_surface(&surface)
+            .unwrap();
+        texture
+    }).collect_vec();
 
-		let max_hz = fourier.last().unwrap().re;
-		let max_vo = fourier.iter().max_by(|a, b|
-			a.im.partial_cmp(&b.im).unwrap()
-		).unwrap().im;
+	// Build the header, with numbers from 0 to 43, but with an additional space between 0 and 1
+	let header = std::iter::once(" 0  ".to_string())
+					.chain((1 .. FRET_COUNT)
+					.map(|i| format!("{:^3}", i))).join("");
 
-		canvas.draw_points(fourier.iter().map(|c|
-			Point::new(
-				(c.re / max_hz * FOURIER_WIDTH as f32) as i32 + 1,
-				FOURIER_HEIGHT as i32 - 1 - (c.im / max_vo * (FOURIER_HEIGHT - 1) as f32) as i32,
-			)
-		).collect::<Vec<Point>>().as_slice()).unwrap();
+	let surface_header = font.render(&header).blended(Color::RGB(255, 255, 255)).unwrap();
 
-		canvas.present();
-	}
+	let texture_header = texture_creator.create_texture_from_surface(&surface_header).unwrap();
 
-	pub fn draw_notes(&mut self, scores:&[f32; NOTE_COUNT]) {
+	// Build the event pump, to kill everything elegantly
+    let mut events = sdl.event_pump().unwrap();
 
-		let canvas = &mut self.canvas_board;
+	// Iterate on scores
+    for scores in receiver.into_iter() {
 
-		canvas.set_draw_color(Color::RGB(0, 0, 0));
-		canvas.clear();
+		// Draw the fourier frequency graph
+		draw_fourier(&mut canvas_fourier, &scores);
 
-		let mut pnt = Point::new(0, 0);
+		// Draw the fretboard graph
+        draw_board(&mut canvas_board, &scores, &textures, &texture_header);
 
-		// Display the fret count
-		//write!(&mut buffer, " 0 |").unwrap();
-		//for i in 1 .. GUITAR_STRING_LENGTH {
-		//	write!(&mut buffer, "{:^3}", i).unwrap();
-		//}
-		//write!(&mut buffer, "\n").unwrap();
-		pnt = pnt.offset(0, STRING_HEIGHT as i32);
+        for event in events.poll_iter() {
+            match event {
+                Event::Quit {..} |
+                Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
+                    return Ok(());
+                },
+                _ => {}
+            }
+        }
+    }
 
-		// For every guitar strings
-		for &j in STRINGS.iter().rev() {
-			// For every note on that string
-			for i in j..j + FRET_COUNT as usize {
-				// Get note name and calculated score
-				let name = self.options.notation.get_names()[i % 12];
-				let score = scores[i];
-				// Write the name with the appropriate color
-            	let score = score.max(0f32).min(1f32);
-				let gradient = (score * 255f32) as u8;
-				canvas.set_draw_color(Color::RGB(gradient, 255 - gradient, gradient / 4));
-				canvas.fill_rect(Rect::new(pnt.x, pnt.y, FRET_WIDTH, STRING_HEIGHT)).unwrap();
-				// Add the bar to differentiate the zero 'fret' from the rest
-				if i == j {
-					pnt = pnt.offset(FRET_LINE as i32, 0);
-				}
-				pnt = pnt.offset(FRET_WIDTH as i32, 0);
+    Ok(())
+}
+
+// Display the fretboard graph
+fn draw_board(canvas:&mut Canvas<Window>, scores:&Scores, texture_notes:&[Texture], texture_header:&Texture) {
+
+	// Clear canvas
+	canvas.set_draw_color(Color::RGB(30, 30, 30));
+	canvas.clear();
+
+	// Display Header
+	canvas.copy(&texture_header, None, Some(Rect::new(0, 0, BOARD_WIDTH, STRING_HEIGHT))).unwrap();
+
+	// The canvas position
+	let mut pnt = Point::new(0, 0);
+
+	pnt = pnt.offset(0, STRING_HEIGHT as i32);
+
+	// For every guitar strings
+	for &j in STRINGS.iter().rev() {
+		// For every note on that string
+		for i in j..j + FRET_COUNT as usize {
+			// Get note name and calculated score
+			let texture = &texture_notes[i % 12];
+			let score = scores.notes[i];
+			// Write the name with the appropriate color
+			let score = score.max(0f32).min(1f32);
+			let gradient = (score * 255f32) as u8;
+			let rect = Rect::new(pnt.x, pnt.y, FRET_WIDTH, STRING_HEIGHT);
+			canvas.set_draw_color(Color::RGB(gradient, 255 - gradient, gradient / 4));
+			canvas.fill_rect(rect).unwrap();
+			canvas.copy(texture, None, Some(rect)).unwrap();
+			// Add the bar to differentiate the zero 'fret' from the rest
+			if i == j {
+				pnt = pnt.offset(FRET_LINE as i32, 0);
 			}
-			pnt = Point::new(0, pnt.y() + STRING_HEIGHT as i32);
+			pnt = pnt.offset(FRET_WIDTH as i32, 0);
 		}
-		canvas.present();
+		pnt = Point::new(0, pnt.y() + STRING_HEIGHT as i32);
 	}
+	canvas.present();
+}
+
+// Display the fourier graph
+fn draw_fourier(canvas:&mut Canvas<Window>, scores:&Scores) {
+	
+	// Clear graph
+	canvas.set_draw_color(Color::RGB(30, 30, 30));
+
+	canvas.clear();
+
+	canvas.set_draw_color(Color::RGB(255, 255, 255));
+
+	// Get maximum frequency (alway the same)
+	let max_hz = scores.fourier.last().unwrap().re;
+
+	// Get maximum intensity (varies with time)
+	let max_vo = scores.fourier.iter().max_by(|a, b|
+		a.im.partial_cmp(&b.im).unwrap()
+	).unwrap().im;
+
+	// Draw data points
+	let points = scores.fourier.iter().map(|c|
+		Point::new(
+			(c.re / max_hz * FOURIER_WIDTH as f32) as i32 + 1,
+			FOURIER_HEIGHT as i32 - 1 - (c.im / max_vo * (FOURIER_HEIGHT - 1) as f32) as i32,
+		)
+	).collect::<Vec<Point>>();
+
+	canvas.draw_points(points.as_slice()).unwrap();
+
+	// Flush
+	canvas.present();
 }
