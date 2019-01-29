@@ -18,9 +18,9 @@ On the other hand, because the analysis is still a couple levels of abstractions
 
 ## Requirements
 
-You need a modern terminal, with true-colour support. Apart from that, this should run on anything with enough power. The clear-screen signal is currently terminal specific, but not exactly needed.
+The dependencies is SDL2 and SDL2-ttf (or libsdl2-dev and libsdl2-ttf-dev for linux)
 
-The only dependendy is SDL2 (libsdl2-dev for linux).
+For the terminal display you will need a modern terminal, with true-colour support.
 
 You also need cargo, but that's a bit of a given for any rust project.
 
