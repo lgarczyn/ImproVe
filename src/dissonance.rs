@@ -19,15 +19,18 @@ const DISSONANCE_OCTAVE_RATIO: f32 = 1.02;
 // Currently doesn't differentiates between pitch of inverse ratios
 pub fn estimate(f_1: f32, f_2: f32) -> f32 {
     // Find the ratio between the two frequencies
+    // FACTOR D reordering frequencies
     let ratio = if f_1 < f_2 { f_2 / f_1 } else { f_1 / f_2 };
 
     // Get number of full octaves
     let octaves = ratio.log2() as i32;
     // Reduce to less than 1 octave
     let ratio = ratio / 2f32.powi(octaves);
+    // FACTOR E OCTAVE RATIO
     // Increase dissonance with octave distance
     let cons = DISSONANCE_OCTAVE_RATIO.powi(octaves);
     // Get lookup table index
+    // FACTOR F LOOKUP DATA
     let index = ((ratio - 1f32) * 200f32) as usize;
     // Return approximate value
     cons * DISSONANCE_TABLE[index]

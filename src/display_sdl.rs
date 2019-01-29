@@ -68,8 +68,8 @@ pub fn display(sdl:Sdl, receiver:Receiver<Scores>, options:DisplayOptions) -> Re
 
     let mut canvas_board = window.into_canvas().build().unwrap();
 
-	canvas_board.clear();
-	canvas_fourier.clear();
+	canvas_board.present();
+	canvas_fourier.present();
 
 	// Build text textures, for use in the loop
 
@@ -172,7 +172,7 @@ fn draw_fourier(canvas:&mut Canvas<Window>, scores:&Scores) {
 
 	canvas.clear();
 
-	canvas.set_draw_color(Color::RGB(255, 255, 255));
+	canvas.set_draw_color(Color::RGB(30, 255, 30));
 
 	// Get maximum frequency (alway the same)
 	let max_hz = scores.fourier.last().unwrap().re;
@@ -183,12 +183,34 @@ fn draw_fourier(canvas:&mut Canvas<Window>, scores:&Scores) {
 	).unwrap().im;
 
 	// Draw data points
-	let points = scores.fourier.iter().map(|c|
+	let points = scores.fourier.iter().map(|c| {
+		let im = c.im / crate::fourier::a_weigh_frequency(c.re).powi(2);
 		Point::new(
 			(c.re / max_hz * FOURIER_WIDTH as f32) as i32 + 1,
-			FOURIER_HEIGHT as i32 - 1 - (c.im / max_vo * (FOURIER_HEIGHT - 1) as f32) as i32,
-		)
+			FOURIER_HEIGHT as i32 - 1 - (im / max_vo * (FOURIER_HEIGHT - 1) as f32) as i32,
+		)}
 	).collect::<Vec<Point>>();
+
+	canvas.draw_points(points.as_slice()).unwrap();
+
+	canvas.set_draw_color(Color::RGB(255, 255, 255));
+
+	// Draw data points
+	let points = scores.fourier.iter().map(|c| {
+		let im = c.im;
+		Point::new(
+			(c.re / max_hz * FOURIER_WIDTH as f32) as i32 + 1,
+			FOURIER_HEIGHT as i32 - 1 - (im / max_vo * (FOURIER_HEIGHT - 1) as f32) as i32,
+		)}
+	).collect::<Vec<Point>>();
+
+	canvas.draw_points(points.as_slice()).unwrap();
+
+	canvas.set_draw_color(Color::RGB(30, 30, 255));
+
+	println!("{} {} {} {} {} {} {}", max_hz, max_hz / 2f32, max_hz / 4f32, max_hz / 8f32, max_hz / 16f32, max_hz / 32f32, max_hz / 64f32);
+	// Draw data points
+	let points = (0 .. 20).map(|i| Point::new((FOURIER_WIDTH / 2u32.pow(i)) as i32, 0)).collect::<Vec<Point>>();
 
 	canvas.draw_points(points.as_slice()).unwrap();
 

@@ -14,7 +14,7 @@ use crate::audio_buffer::AudioBuffer;
 use crate::scores::{Scores, calculate};
 
 // Receives audio input, start FFT on most recent data and send results
-pub fn fourier_thread(buffer:AudioBuffer, sender:Sender<Scores>) {
+pub fn fourier_thread(buffer:AudioBuffer, sender:Sender<Scores>, freq:i32) {
     // The FFT pool, allows for optimized yet flexible data sizes
     let mut planner = FFTplanner::<f32>::new(false);
     // The audio buffer, to get uniformly-sized audio packets
@@ -22,9 +22,9 @@ pub fn fourier_thread(buffer:AudioBuffer, sender:Sender<Scores>) {
 
     // Get the first first few seconds of recording
     println!("Gathering noise profile");
-    let vec = buffer.take();
+    //let vec = buffer.take();
     // Extract frequencies to serve as mask
-    let mask = fourier_analysis(&vec[..], &mut planner, None);
+    let mask = None;//Some(&fourier_analysis(&vec[..], &mut planner, None));
 
     // Start analysis loop
     println!("Starting analysis");
@@ -32,7 +32,7 @@ pub fn fourier_thread(buffer:AudioBuffer, sender:Sender<Scores>) {
         // Aggregate all pending input
         let vec = buffer.take();
         // Apply fft and extract frequencies
-        let fourier = fourier_analysis(&vec[..], &mut planner, Some(&mask));
+        let fourier = fourier_analysis(&vec[..], &mut planner, freq, mask);
         // Calculate dissonance of each note
         let scores = calculate(fourier);
 		// Send
@@ -43,6 +43,7 @@ pub fn fourier_thread(buffer:AudioBuffer, sender:Sender<Scores>) {
 fn fourier_analysis(
     vec: &[f32],
     planner: &mut FFTplanner<f32>,
+	freq:i32,
     mask: Option<&Vec<Complex<f32>>>,
 ) -> Vec<Complex<f32>> {
     // Setup fft parameters
@@ -63,9 +64,10 @@ fn fourier_analysis(
     // Map results to frequencies and intensity
     for (c, i) in fft_out.iter_mut().zip(1..) {
         // Calculate intensity
+		// FACTOR A norm_sqr vs sqr ?	
         c.im = c.norm_sqr();// (*a * *a + c.im * c.im).sqrt();
         // Calculate frequency
-        c.re = i as f32 * 48000f32 / len as f32;
+        c.re = i as f32 * freq as f32 / len as f32;
         // Noise masking, currently unused
         if let Some(vec) = mask {
             if c.im > vec[i - 1].im {
@@ -75,6 +77,7 @@ fn fourier_analysis(
             }
         }
         // Reducing intensity of frequencies out of human hearing range
+		// FACTOR B a_weighing or not
         c.im *= a_weigh_frequency(c.re).powi(2);
     }
 
@@ -93,7 +96,7 @@ fn fourier_analysis(
 
 // https://fr.mathworks.com/matlabcentral/fileexchange/46819-a-weighting-filter-with-matlab
 // Reduce frequency intensity based on human perception
-fn a_weigh_frequency(freq: f32) -> f32 {
+pub fn a_weigh_frequency(freq: f32) -> f32 {
     let c1 = 12194.217f32.powi(2);
     let c2 = 20.598997f32.powi(2);
     let c3 = 107.65265f32.powi(2);

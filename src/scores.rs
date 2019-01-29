@@ -21,6 +21,7 @@ pub fn calculate(frequencies: Vec<Complex<f32>>) -> Scores {
         let diff_a: i32 = i as i32 - BASE_NOTE as i32;
         let hz = BASE_FREQUENCY * 2f32.powf(diff_a as f32 / 12f32);
         // For Complex{re:a, im:b} in [220, 440, 880].iter().map(|&hz| Complex{re:hz as f32, im:100f32})
+        // FACTOR G equalizing scores
         for &Complex { re: a, im: b } in frequencies.iter() {
             score += dissonance::estimate(a, hz) * b;
         }
@@ -34,6 +35,7 @@ pub fn calculate(frequencies: Vec<Complex<f32>>) -> Scores {
     // Normalize score
     for score in notes.iter_mut() {
         *score = (*score - min) / amplitude;
+        // FACTOR H square rooting scores 
         *score = score.powf(0.5f32);
     }
     Scores{notes, fourier:frequencies}

@@ -100,16 +100,20 @@ fn main() -> Result<(), String> {
 
     // Set the desired specs
     let desired_spec = AudioSpecDesired {
-        freq: None,
+        freq: Some(88200),
         channels: Some(1),
         samples: None
     };
 
     // Build the callback object and start recording
+    let mut received_spec = None;
+
     let capture_device = audio_subsystem.open_capture(None, &desired_spec, |spec| {
         println!("Capture Spec = {:?}", spec);
+        received_spec = Some(spec);
         Recorder { audio_sender }
     })?;
+    let freq = received_spec.unwrap().freq;
 
     capture_device.resume();
 
@@ -118,7 +122,7 @@ fn main() -> Result<(), String> {
 
     // Start the data analysis
     std::thread::spawn(move || {
-        fourier::fourier_thread(buffer, score_sender);
+        fourier::fourier_thread(buffer, score_sender, freq);
     });
 
     if matches.is_present("terminal") {
