@@ -20,7 +20,7 @@ On the other hand, because the analysis is still a couple levels of abstractions
 
 The dependencies is SDL2 and SDL2-ttf (or libsdl2-dev and libsdl2-ttf-dev for linux)
 
-For the terminal display you will need a modern terminal, with true-colour support.
+For the terminal display you will need a modern terminal, with true-colour and termcaps support.
 
 You also need cargo, but that's a bit of a given for any rust project.
 
