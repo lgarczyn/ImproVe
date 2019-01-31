@@ -15,6 +15,7 @@ mod scores;
 mod display;
 mod display_sdl;
 mod display_term;
+mod notes;
 
 use self::display::DisplayOptions;
 use self::audio_buffer::{AudioBuffer, BufferOptions};

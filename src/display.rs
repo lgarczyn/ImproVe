@@ -1,4 +1,6 @@
 
+use crate::notes::Note;
+
 #[derive(Clone, Copy, Debug)]
 pub enum Notation {
 	English,
@@ -13,6 +15,10 @@ const NOTE_NAMES_ROMANCE: [&str; 12] = [
 ];
 
 impl Notation {
+	pub fn get_name(&self, note:Note) -> &str {
+		let index = note.get_octave_index() as usize;
+		self.get_names()[index]
+	}
 	pub fn get_names(&self) -> [&str; 12] {
 		match &self {
 			Notation::English => NOTE_NAMES_ENGLISH,

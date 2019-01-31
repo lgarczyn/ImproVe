@@ -175,7 +175,7 @@ fn draw_fourier(canvas:&mut Canvas<Window>, scores:&Scores) {
 	canvas.set_draw_color(Color::RGB(30, 255, 30));
 
 	// Get maximum frequency (alway the same)
-	let max_hz = scores.fourier.last().unwrap().re;
+	/*let max_hz = scores.fourier.last().unwrap().re;
 
 	// Get maximum intensity (varies with time)
 	let max_vo = scores.fourier.iter().max_by(|a, b|
@@ -184,14 +184,14 @@ fn draw_fourier(canvas:&mut Canvas<Window>, scores:&Scores) {
 
 	// Draw data points
 	let points = scores.fourier.iter().map(|c| {
-		let im = c.im / crate::fourier::a_weigh_frequency(c.re).powi(2);
+		let im = c.im / crate::fourier::a_weigh_frequency(c.re);
 		Point::new(
 			(c.re / max_hz * FOURIER_WIDTH as f32) as i32 + 1,
 			FOURIER_HEIGHT as i32 - 1 - (im / max_vo * (FOURIER_HEIGHT - 1) as f32) as i32,
 		)}
 	).collect::<Vec<Point>>();
 
-	canvas.draw_points(points.as_slice()).unwrap();
+	canvas.draw_lines(points.as_slice()).unwrap();
 
 	canvas.set_draw_color(Color::RGB(255, 255, 255));
 
@@ -204,7 +204,7 @@ fn draw_fourier(canvas:&mut Canvas<Window>, scores:&Scores) {
 		)}
 	).collect::<Vec<Point>>();
 
-	canvas.draw_points(points.as_slice()).unwrap();
+	canvas.draw_lines(points.as_slice()).unwrap();
 
 	canvas.set_draw_color(Color::RGB(30, 30, 255));
 
@@ -212,7 +212,79 @@ fn draw_fourier(canvas:&mut Canvas<Window>, scores:&Scores) {
 	// Draw data points
 	let points = (0 .. 20).map(|i| Point::new((FOURIER_WIDTH / 2u32.pow(i)) as i32, 0)).collect::<Vec<Point>>();
 
-	canvas.draw_points(points.as_slice()).unwrap();
+	canvas.draw_lines(points.as_slice()).unwrap();
+
+	canvas.set_draw_color(Color::RGB(255, 255, 255));*/
+
+	// Draw data points
+	/*let points = [50f32, 100f32, 200f32, 400f32, 800f32, 1600f32].iter().cloned()
+		.map(|f_1|
+			(0 .. FOURIER_WIDTH as i32).zip(std::iter::repeat(f_1)).map(|(x, f_1)| {
+				let factor = 3f32 * x as f32 / FOURIER_WIDTH as f32;
+				let yf = 1f32 - crate::dissonance::dissonance(f_1, 1f32, f_1 * factor, 1f32);
+				let y = (yf * FOURIER_HEIGHT as f32) as i32;
+				Point::new(x, y)
+			})
+		).flatten().collect_vec();
+	
+	for (points, i) in points.iter().chunks(FOURIER_WIDTH as usize).into_iter().zip((0 .. 255).step_by(255 / 6))
+	{
+		canvas.set_draw_color(Color::RGB(i, 255 - i, 126));
+		let points = points.cloned().collect_vec();
+		canvas.draw_lines(points.as_slice()).unwrap();
+	}*/
+
+	// Draw data points
+	/*let points = (0 .. FOURIER_WIDTH as i32).map(|x| {
+			let factor = 9f32 * x as f32 / FOURIER_WIDTH as f32;
+			let yf = 1f32 - (crate::dissonance::estimate(440f32, 1f32, 440f32 * factor)) / 2f32;
+			let y = (yf * FOURIER_HEIGHT as f32) as i32;
+			Point::new(x, y)
+		}).collect_vec();
+
+	canvas.set_draw_color(Color::RGB(255, 255, 255));
+
+	canvas.draw_lines(points.as_slice()).unwrap();
+
+	// Draw data points
+	let points = (0 .. FOURIER_WIDTH as i32).map(|x| {
+			let factor = 9f32 * x as f32 / FOURIER_WIDTH as f32;
+			let yf = 1f32 - (crate::dissonance::estimate(crate::notes::Note::C4.freq(), 1f32, crate::notes::Note::C4.freq() * factor)) / 2f32;
+			let y = (yf * FOURIER_HEIGHT as f32) as i32;
+			Point::new(x, y)
+		}).collect_vec();
+
+	canvas.set_draw_color(Color::RGB(255, 0, 255));
+
+	canvas.draw_lines(points.as_slice()).unwrap();
+	
+
+	// Draw data points
+	let points = (0 .. FOURIER_WIDTH as i32).map(|x| {
+			let factor = 9f32 * x as f32 / FOURIER_WIDTH as f32;
+			let yf = 1f32 - (crate::dissonance::estimate(crate::notes::Note::A5.freq(), 1f32, crate::notes::Note::A5.freq() * factor)) / 2f32;
+			let y = (yf * FOURIER_HEIGHT as f32) as i32;
+			Point::new(x, y)
+		}).collect_vec();
+
+	canvas.set_draw_color(Color::RGB(255, 255, 0));
+
+	canvas.draw_lines(points.as_slice()).unwrap();*/
+	
+	let max = scores.notes.iter().max_by(|ref a, ref b| a.partial_cmp(b).unwrap()).unwrap();
+	let min = scores.notes.iter().min_by(|ref a, ref b| a.partial_cmp(b).unwrap()).unwrap();
+
+	let points = scores.notes.iter().enumerate().map(|(i, s)| {
+			let x = (i as f32 / scores.notes.len() as f32 * FOURIER_WIDTH as f32) as i32;
+			let yf = 1f32 - (s - min) / (max - min);
+			let y = (yf * FOURIER_HEIGHT as f32) as i32;
+			Point::new(x, y)
+		}).collect_vec();
+
+	canvas.set_draw_color(Color::RGB(255, 255, 0));
+
+	canvas.draw_lines(points.as_slice()).unwrap();
+
 
 	// Flush
 	canvas.present();

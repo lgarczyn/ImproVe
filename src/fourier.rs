@@ -77,8 +77,8 @@ fn fourier_analysis(
             }
         }
         // Reducing intensity of frequencies out of human hearing range
-		// FACTOR B a_weighing or not
-        c.im *= a_weigh_frequency(c.re).powi(2);
+		// FACTOR B a_weighing and how much 
+        c.im *= a_weigh_frequency(c.re);
     }
 
     // Sort by intensity

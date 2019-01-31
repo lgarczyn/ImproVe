@@ -28,9 +28,7 @@ Run with `cargo run`, help with `cargo run -- -h`
 
 ### To Do
 
-* Stop assuming bitrate
-* Maybe add possible inbetweening for powerful computers
 * Audio feedback mode ?
 * Try adding a better dissonance model, using a sample of the targeted instrument
 * other displays than guitar
-* different display modes with matching features
+* other instruments models

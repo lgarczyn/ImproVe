@@ -1,17 +1,19 @@
 // The terminal display loop
 
-use crate::scores::{NOTE_COUNT, Scores};
+use crate::notes::{NOTE_COUNT, Note};
+use crate::scores::Scores;
 use crate::display::DisplayOptions;
 
 use std::sync::mpsc::Receiver;
 use std::io::BufWriter;
 use std::io::Write;
 use std::io;
+use crate::notes::Note::{*};
 
 // Number of notes in line
 const GUITAR_STRING_LENGTH: usize = 44;
 // Every string defined by their note (E2 to E4)
-const GUITAR_STRINGS: [usize; 6] = [16 + 0, 16 + 5, 16 + 10, 16 + 15, 16 + 19, 16 + 24];
+const GUITAR_STRINGS: [Note; 6] = [E2, A2, D3, G3, B3, E4];
 
 // Clear terminal and display guitar
 fn guitar(scores: &[f32; NOTE_COUNT], options:DisplayOptions) {
@@ -31,12 +33,12 @@ fn guitar(scores: &[f32; NOTE_COUNT], options:DisplayOptions) {
     write!(&mut buffer, "\n").unwrap();
 
     // For every guitar strings
-    for &j in GUITAR_STRINGS.iter().rev() {
+    for &string in GUITAR_STRINGS.iter().rev() {
         // For every note on that string
-        for i in j..j + GUITAR_STRING_LENGTH {
+        for note in string.iter_from().take(GUITAR_STRING_LENGTH) {
             // Get note name and calculated score
-            let name = options.notation.get_names()[i % 12];
-            let score = scores[i];
+            let name = options.notation.get_name(note);
+            let score = scores[note as usize];
             let score = score.max(0f32).min(1f32);
             // Write the name with the appropriate color
             let gradient = (score * 255f32) as u8;
@@ -47,7 +49,7 @@ fn guitar(scores: &[f32; NOTE_COUNT], options:DisplayOptions) {
                 name = name
             ).unwrap();
             // Add the bar to differentiate the zero 'fret' from the rest
-            if i == j {
+            if string == note {
                 write!(&mut buffer, "\x1b[0;0m|").unwrap();
             }
         }
