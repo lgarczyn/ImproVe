@@ -56,6 +56,9 @@ pub fn estimate(f_heard: f32, i_heard:f32, f_inst: f32) -> f32 {
             dissonance(f_heard, i_heard, harmonic_freq_high, harmonic_int)
             + dissonance(f_heard, i_heard, harmonic_freq_low, harmonic_int);
         dis += harmonic_dis;
+        if harmonic_dis < 0.00001f32 {
+            return dis;
+        }
     }
 
     //panic!();
