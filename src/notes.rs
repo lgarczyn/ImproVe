@@ -31,12 +31,6 @@ impl Note {
 	pub fn iter_from(&self) -> std::iter::Skip<<Note as IntoEnumIterator>::Iterator> {
 		Note::into_enum_iter().skip(*self as usize)
 	}
-	pub fn iter_to(&self) ->  std::iter::Take<<Note as IntoEnumIterator>::Iterator> {
-		Note::into_enum_iter().take(*self as usize)
-	}
-	pub fn get_octave(&self) -> u32 {
-		(*self) as u32 / 12
-	}
 	pub fn get_octave_index(&self) -> u32 {
 		(*self as u32) % 12
 	}
