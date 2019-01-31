@@ -21,9 +21,9 @@ fn guitar(scores: &[f32; NOTE_COUNT], options:DisplayOptions) {
     let mut buffer = BufWriter::new(io::stdout());
 
     // Add the clear screen message to the buffer
-	if options.clear_term {
-    	print!("{}[2J\n", 27 as char);
-	}
+    if options.clear_term {
+        write!(&mut buffer, "{}", termion::cursor::Up(GUITAR_STRINGS.len() as u16 + 1)).unwrap();
+    }
 
     // Display the fret count
     write!(&mut buffer, " 0 |").unwrap();

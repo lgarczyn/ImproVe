@@ -8,7 +8,8 @@ edition = "2018"
 rustfft = '>= 3.0.0'
 itertools = '>= 0.8.0'
 clap = '>= 2.32.0'
-enum-iterator = ">= 0.3.0"
+enum-iterator = '>= 0.3.0'
+termion = '>= 1.5.1'
 
 [dependencies.sdl2]
 version = '0.32.0'
