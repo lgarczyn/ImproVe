@@ -4,6 +4,7 @@ use enum_iterator::IntoEnumIterator;
 // Any note one might reasonably play
 #[derive(Copy, Clone, Debug, PartialEq, IntoEnumIterator)]
 pub enum Note {
+	C0, CSharp0, D0, DSharp0, E0, F0, FSharp0, G0, GSharp0, A0, ASharp0, B0,
 	C1, CSharp1, D1, DSharp1, E1, F1, FSharp1, G1, GSharp1, A1, ASharp1, B1,
 	C2, CSharp2, D2, DSharp2, E2, F2, FSharp2, G2, GSharp2, A2, ASharp2, B2,
 	C3, CSharp3, D3, DSharp3, E3, F3, FSharp3, G3, GSharp3, A3, ASharp3, B3,
@@ -17,7 +18,7 @@ pub enum Note {
 
 // Maximum note index
 pub const NOTE_COUNT: usize = Note::B9 as usize + 1;
-pub const BASE_NOTE:Note = Note::A4;
+pub const BASE_NOTE: Note = Note::A4;
 pub const BASE_FREQUENCY: f32 = 440f32;
 
 impl Note {
