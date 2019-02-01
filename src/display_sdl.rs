@@ -227,16 +227,21 @@ fn draw_fourier(canvas: &mut Canvas<Window>, scores: &Scores) {
 
 	canvas.set_draw_color(Color::RGB(30, 255, 30));
 
+	let fourier = scores.fourier.iter().skip(30).cloned().map(|mut c| {
+		c.im = c.im * c.re;
+		c.re = c.re.ln();
+		c
+	}).collect_vec();
+
 	// Get maximum frequency (alway the same)
-	let max_hz = scores.fourier.last().unwrap().re;
+	let min_hz = fourier.first().unwrap().re;
+	let max_hz = fourier.last().unwrap().re;
 
 	// Get maximum intensity (varies with time)
-	let max_vo = scores
-		.fourier
+	let max_vo = fourier
 		.iter()
 		.max_by(|a, b| a.im.partial_cmp(&b.im).unwrap())
-		.unwrap()
-		.im;
+		.unwrap().im;
 
 	// Draw uncorrected frequencies
 	let points = scores
@@ -245,8 +250,8 @@ fn draw_fourier(canvas: &mut Canvas<Window>, scores: &Scores) {
 		.map(|c| {
 			let im = c.im / crate::fourier::a_weigh_frequency(c.re);
 			Point::new(
-				map(c.re, 0f32..max_hz, 0..FOURIER_WIDTH as i32 - 1, false),
-				map(im, 0f32..max_vo, 0..FOURIER_HEIGHT as i32 - 1, true),
+				map(c.re, min_hz .. max_hz, 0 .. FOURIER_WIDTH as i32 - 1, false),
+				map(im, 0f32 .. max_vo, 0 .. FOURIER_HEIGHT as i32 - 1, true),
 			)
 		})
 		.collect::<Vec<Point>>();
@@ -261,8 +266,8 @@ fn draw_fourier(canvas: &mut Canvas<Window>, scores: &Scores) {
 		.iter()
 		.map(|c| {
 			Point::new(
-				map(c.re, 0f32..max_hz, 0..FOURIER_WIDTH as i32 - 1, false),
-				map(c.im, 0f32..max_vo, 0..FOURIER_HEIGHT as i32 - 1, true),
+				map(c.re, min_hz .. max_hz, 0 .. FOURIER_WIDTH as i32 - 1, false),
+				map(c.im, 0f32 .. max_vo, 0 .. FOURIER_HEIGHT as i32 - 1, true),
 			)
 		})
 		.collect::<Vec<Point>>();
@@ -270,17 +275,6 @@ fn draw_fourier(canvas: &mut Canvas<Window>, scores: &Scores) {
 	canvas.draw_lines(points.as_slice()).unwrap();
 
 	canvas.set_draw_color(Color::RGB(30, 30, 255));
-
-	// Draw scale
-	let points = (0..20)
-		.map(|i| Point::new((FOURIER_WIDTH / 2u32.pow(i)) as i32, 0))
-		.collect::<Vec<Point>>();
-
-	canvas.draw_lines(points.as_slice()).unwrap();
-
-	canvas.set_draw_color(Color::RGB(255, 255, 255));
-
-	draw_major_chord_graph(canvas, scores);
 
 	// Flush
 	canvas.present();
