@@ -16,7 +16,7 @@ pub fn calculate(frequencies: Vec<Complex<f32>>) -> Scores {
         let mut score = 0f32;
         let hz = note.freq();
         for &Complex { re: a, im: b } in frequencies.iter() {
-            score += dissonance::estimate(a, b, hz);
+            score += dissonance::estimate(a, hz) * b;
         }
         notes[note as usize] = score;
     }
@@ -36,13 +36,10 @@ pub fn calculate(frequencies: Vec<Complex<f32>>) -> Scores {
         max = max.max(score);
     }
     // Get amplitude to normalize
-    // Set a min value of 5000 to avoid amplifying noise
-    let amplitude = max - min;//).max(5000f32);
+    let amplitude = max - min;
     // Normalize score
     for score in notes.iter_mut() {
         *score = (*score - min) / amplitude;
-        // FACTOR H square rooting scores 
-        //*score = score.powf(0.5f32);
     }
     Scores{notes, fourier:frequencies}
 }

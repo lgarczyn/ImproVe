@@ -10,6 +10,8 @@ itertools = '>= 0.8.0'
 clap = '>= 2.32.0'
 enum-iterator = '>= 0.3.0'
 termion = '>= 1.5.1'
+noisy_float = '0.1.9'
+num-traits = '>=0.2'
 
 [dependencies.sdl2]
 version = '0.32.0'
