@@ -123,7 +123,7 @@ pub fn display(
 	// Iterate on scores
 	for scores in receiver.into_iter() {
 		// Draw the fourier frequency graph
-		draw_fourier(&mut canvas_fourier, &scores);
+		draw_graph(&mut canvas_fourier, &scores);
 
 		// Draw the fretboard graph
 		draw_board(&mut canvas_board, &scores, &textures, &texture_header);
@@ -218,20 +218,35 @@ where
 	T::from(mapped).unwrap()
 }
 
-// Display the fourier graph
-fn draw_fourier(canvas: &mut Canvas<Window>, scores: &Scores) {
+fn draw_graph(canvas: &mut Canvas<Window>, scores: &Scores) {
+
 	// Clear graph
 	canvas.set_draw_color(Color::RGB(0, 0, 0));
-
 	canvas.clear();
+
+	draw_notes(canvas, scores);
+
+	// Flush
+	canvas.present();
+}
+
+// Display the fourier graph
+#[allow(dead_code)]
+fn draw_fourier(canvas: &mut Canvas<Window>, scores: &Scores) {
 
 	canvas.set_draw_color(Color::RGB(30, 255, 30));
 
-	let fourier = scores.fourier.iter().skip(30).cloned().map(|mut c| {
-		c.im = c.im * c.re;
-		c.re = c.re.ln();
-		c
-	}).collect_vec();
+	let fourier = scores
+		.fourier
+		.iter()
+		.skip(30)
+		.cloned()
+		.map(|mut c| {
+			c.im = c.im * c.re;
+			c.re = c.re.ln();
+			c
+		})
+		.collect_vec();
 
 	// Get maximum frequency (alway the same)
 	let min_hz = fourier.first().unwrap().re;
@@ -241,7 +256,8 @@ fn draw_fourier(canvas: &mut Canvas<Window>, scores: &Scores) {
 	let max_vo = fourier
 		.iter()
 		.max_by(|a, b| a.im.partial_cmp(&b.im).unwrap())
-		.unwrap().im;
+		.unwrap()
+		.im;
 
 	// Draw uncorrected frequencies
 	let points = scores
@@ -250,8 +266,8 @@ fn draw_fourier(canvas: &mut Canvas<Window>, scores: &Scores) {
 		.map(|c| {
 			let im = c.im / crate::fourier::a_weigh_frequency(c.re);
 			Point::new(
-				map(c.re, min_hz .. max_hz, 0 .. FOURIER_WIDTH as i32 - 1, false),
-				map(im, 0f32 .. max_vo, 0 .. FOURIER_HEIGHT as i32 - 1, true),
+				map(c.re, min_hz..max_hz, 0..FOURIER_WIDTH as i32 - 1, false),
+				map(im, 0f32..max_vo, 0..FOURIER_HEIGHT as i32 - 1, true),
 			)
 		})
 		.collect::<Vec<Point>>();
@@ -266,8 +282,8 @@ fn draw_fourier(canvas: &mut Canvas<Window>, scores: &Scores) {
 		.iter()
 		.map(|c| {
 			Point::new(
-				map(c.re, min_hz .. max_hz, 0 .. FOURIER_WIDTH as i32 - 1, false),
-				map(c.im, 0f32 .. max_vo, 0 .. FOURIER_HEIGHT as i32 - 1, true),
+				map(c.re, min_hz..max_hz, 0..FOURIER_WIDTH as i32 - 1, false),
+				map(c.im, 0f32..max_vo, 0..FOURIER_HEIGHT as i32 - 1, true),
 			)
 		})
 		.collect::<Vec<Point>>();
@@ -275,9 +291,6 @@ fn draw_fourier(canvas: &mut Canvas<Window>, scores: &Scores) {
 	canvas.draw_lines(points.as_slice()).unwrap();
 
 	canvas.set_draw_color(Color::RGB(30, 30, 255));
-
-	// Flush
-	canvas.present();
 }
 
 // Various graphs, mostly for debugging.
@@ -393,6 +406,28 @@ pub fn draw_score_octave_graph(canvas: &mut Canvas<Window>, scores: &Scores) {
 		.collect_vec();
 
 	canvas.set_draw_color(Color::RGB(255, 255, 0));
+
+	canvas.draw_lines(points.as_slice()).unwrap();
+}
+
+#[allow(dead_code)]
+pub fn draw_notes(canvas: &mut Canvas<Window>, scores: &Scores) {
+
+	let mut min = std::f32::INFINITY;
+	let mut max = std::f32::NEG_INFINITY;
+
+	for &score in scores.notes.iter() {
+		min = min.min(score);
+		max = max.max(score);
+	}
+
+	let points = (0 .. FOURIER_WIDTH).map(|x| {
+		let i = map(x, 0 .. FOURIER_WIDTH, 0 .. scores.notes.len(), false);
+		let y = map(scores.notes[i], min .. max, 0 .. FOURIER_HEIGHT as i32, true);
+		Point::new(x as i32, y)
+	}).collect_vec();
+
+	canvas.set_draw_color(Color::RGB(255, 255, 255));
 
 	canvas.draw_lines(points.as_slice()).unwrap();
 }
