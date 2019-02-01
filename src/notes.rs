@@ -22,7 +22,7 @@ pub const BASE_FREQUENCY: f32 = 440f32;
 
 impl Note {
 	pub fn freq(&self) -> f32 {
-		let half_tones = BASE_NOTE as i32 - (*self) as i32;
+		let half_tones = (*self) as i32 - BASE_NOTE as i32;
 		BASE_FREQUENCY * 2f32.powf(half_tones as f32 / 12f32) 
 	}
 	pub fn iter() -> <Note as IntoEnumIterator>::Iterator {
