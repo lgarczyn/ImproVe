@@ -45,10 +45,10 @@ pub fn estimate(f_heard: f32, f_inst: f32) -> f32 {
         let mut dis = 0f32;
         dis += dissonance(f_heard, f_inst);
             
-        for i in 2 .. 32 {
+        for i in 2 .. 200 {
             let harmonic_freq_high = f_inst * i as f32;
             let harmonic_freq_low = f_inst / i as f32;
-            let harmonic_int = 1.3f32.powi(1 - i);
+            let harmonic_int = 1.1f32.powi(1 - i);
             let harmonic_dis =
                 dissonance(f_heard, harmonic_freq_high)
                 + dissonance(f_heard, harmonic_freq_low);
