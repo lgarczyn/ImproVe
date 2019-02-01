@@ -42,6 +42,19 @@ fn main() -> Result<(), String> {
                 Ok(_) => Err("Argument out of range: (32 .. 1048576)".to_owned()),
                 Err(_) => Err("Argument is not an unsigned int".to_owned())
             }))
+        .arg(Arg::with_name("zpadding")
+            .short("z")
+            .long("zpadding")
+            .value_name("FACTOR")
+            .help("The fourier transform can interpolate sparse data...\n\
+                write more stuff\n")
+            .next_line_help(true)
+            .default_value("2")
+            .validator(|s| match s.parse::<u32>() {
+                Ok(1 ..= 32) => Ok(()),
+                Ok(_) => Err("Argument out of range: (1 .. 32)".to_owned()),
+                Err(_) => Err("Argument is not an unsigned int".to_owned())
+            }))
         .arg(Arg::with_name("notation")
             .short("n")
             .long("notation")
@@ -89,6 +102,9 @@ fn main() -> Result<(), String> {
     // Check if values can be analyzed multiple times if input is too slow
     buf_opt.overlap = matches.is_present("overlap");
 
+    // Get the zero-padding factor
+    let zpadding = matches.value_of("zpadding").unwrap().parse::<u32>().unwrap();
+
     // The channel to get data from audio callback and back
     let (audio_sender, audio_receiver) = channel::<Vec<f32>>();
     let (score_sender, score_receiver) = channel::<Scores>();
@@ -123,7 +139,7 @@ fn main() -> Result<(), String> {
 
     // Start the data analysis
     std::thread::spawn(move || {
-        fourier::fourier_thread(buffer, score_sender, freq);
+        fourier::fourier_thread(buffer, score_sender, freq, zpadding);
     });
 
     if matches.is_present("terminal") {

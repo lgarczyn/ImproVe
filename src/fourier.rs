@@ -14,7 +14,7 @@ use crate::audio_buffer::AudioBuffer;
 use crate::scores::{Scores, calculate};
 
 // Receives audio input, start FFT on most recent data and send results
-pub fn fourier_thread(buffer:AudioBuffer, sender:Sender<Scores>, freq:i32) {
+pub fn fourier_thread(buffer:AudioBuffer, sender:Sender<Scores>, freq:i32, zpadding:u32) {
     // The FFT pool, allows for optimized yet flexible data sizes
     let mut planner = FFTplanner::<f32>::new(false);
     // The audio buffer, to get uniformly-sized audio packets
@@ -32,7 +32,7 @@ pub fn fourier_thread(buffer:AudioBuffer, sender:Sender<Scores>, freq:i32) {
         // Aggregate all pending input
         let vec = buffer.take();
         // Apply fft and extract frequencies
-        let fourier = fourier_analysis(&vec[..], &mut planner, freq, mask);
+        let fourier = fourier_analysis(&vec[..], &mut planner, freq, mask, zpadding);
         // Calculate dissonance of each note
         let scores = calculate(fourier);
 		// Send
@@ -45,13 +45,15 @@ fn fourier_analysis(
     planner: &mut FFTplanner<f32>,
 	freq:i32,
     mask: Option<&Vec<Complex<f32>>>,
+    zpadding: u32
 ) -> Vec<Complex<f32>> {
     // Setup fft parameters
-    let len = vec.len();
+    let len = vec.len() * zpadding as usize;
     let mut fft_in = vec
         .iter()
         .map(|&f| Complex { re: f, im: 0f32 })
         .collect_vec();
+    fft_in.resize(len, Complex::default());
     let mut fft_out = vec![Complex::default(); len];
     let fft = planner.plan_fft(len);
 
@@ -67,7 +69,7 @@ fn fourier_analysis(
 		// FACTOR A norm_sqr vs sqr ?	
         c.im = c.norm_sqr();// (*a * *a + c.im * c.im).sqrt();
         // Calculate frequency
-        c.re = i as f32 * freq as f32 / len as f32;
+        c.re = i as f32 * freq as f32 / len as f32 / zpadding as f32;
         // Noise masking, currently unused
         if let Some(vec) = mask {
             if c.im > vec[i - 1].im {
