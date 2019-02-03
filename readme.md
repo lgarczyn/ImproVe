@@ -32,4 +32,3 @@ Run with `cargo run`, help with `cargo run -- -h`
 * Try adding a better dissonance model, using a sample of the targeted instrument
 * other displays than guitar
 * other instruments models
-* zero padding option

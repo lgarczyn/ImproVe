@@ -280,7 +280,7 @@ fn draw_fourier(canvas: &mut Canvas<Window>, scores: &Scores) {
 
 	canvas.set_draw_color(Color::RGB(255, 255, 255));
 
-	// Draw corrected frequenciesß
+	// Draw corrected frequencies
 	let points = scores
 		.fourier
 		.iter()
