@@ -214,7 +214,7 @@ where
 	} else {
 		into.start + mapped
 	};
-	T::from(mapped).unwrap()
+	T::from(mapped.round()).unwrap()
 }
 
 fn draw_graph(canvas: &mut Canvas<Window>, scores: &Scores) {
@@ -223,7 +223,6 @@ fn draw_graph(canvas: &mut Canvas<Window>, scores: &Scores) {
 	canvas.set_draw_color(Color::RGB(0, 0, 0));
 	canvas.clear();
 
-	//draw_notes(canvas, scores);
 	draw_fourier(canvas, scores);
 
 	// Flush
@@ -237,15 +236,15 @@ fn draw_fourier(canvas: &mut Canvas<Window>, scores: &Scores) {
 	canvas.set_draw_color(Color::RGB(30, 255, 30));
 
 	// Skip boring frequencies
-	// change values to draw on a log scale
-	// boost large frequencies for prettier graph
 	let fourier = scores
 		.fourier
 		.iter()
-		.skip(30)
 		.cloned()
+		.skip(30)
 		.map(|mut f| {
+			// boost large frequencies for prettier graph
 			f.intensity = f.amplitude() * f.value;
+			// change values to draw on a log scale
 			f.value = f.value.ln();
 			f
 		})
@@ -263,31 +262,29 @@ fn draw_fourier(canvas: &mut Canvas<Window>, scores: &Scores) {
 		.intensity;
 
 	// Draw uncorrected frequencies
-	let points = scores
-		.fourier
-		.iter()
-		.map(|f| {
-			// apply reverse correction
-			let i = f.intensity / crate::fourier::a_weigh_frequency(f.value);
-			Point::new(
-				map(f.value, min_hz..max_hz, 0..FOURIER_WIDTH as i32 - 1, false),
-				map(i, 0f32..max_vo, 0..FOURIER_HEIGHT as i32 - 1, true),
-			)
-		})
-		.collect::<Vec<Point>>();
+	//let points = fourier
+	//	.iter()
+	//	.map(|f| {
+	//		// apply reverse correction
+	//		let i = f.intensity / crate::fourier::a_weigh_frequency(f.value.exp());
+	//		Point::new(
+	//			map(f.value, min_hz..max_hz, 0..FOURIER_WIDTH as i32 - 1, false),
+	//			map(i, 0f32..max_vo, 0..FOURIER_HEIGHT as i32 - 1, true),
+	//		)
+	//	})
+	//	.collect::<Vec<Point>>();
 
-	canvas.draw_lines(points.as_slice()).unwrap();
+	//canvas.draw_lines(points.as_slice()).unwrap();
 
 	canvas.set_draw_color(Color::RGB(255, 255, 255));
 
 	// Draw corrected frequencies
-	let points = scores
-		.fourier
+	let points = fourier
 		.iter()
-		.map(|c| {
+		.map(|f| {
 			Point::new(
-				map(c.value, min_hz..max_hz, 0..FOURIER_WIDTH as i32 - 1, false),
-				map(c.intensity, 0f32..max_vo, 0..FOURIER_HEIGHT as i32 - 1, true),
+				map(f.value, min_hz..max_hz, 0..FOURIER_WIDTH as i32 - 1, false),
+				map(f.intensity, 0f32..max_vo, 0..FOURIER_HEIGHT as i32 - 1, true),
 			)
 		})
 		.collect::<Vec<Point>>();
