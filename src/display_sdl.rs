@@ -2,8 +2,6 @@
 
 use std::sync::mpsc::Receiver;
 
-use rustfft::num_complex::Complex;
-
 use itertools::Itertools;
 
 use sdl2::event::Event;
@@ -19,6 +17,7 @@ use sdl2::Sdl;
 
 use crate::display::DisplayOptions;
 use crate::scores::Scores;
+use crate::frequency::Frequency;
 
 // Guitar constants
 
@@ -224,7 +223,8 @@ fn draw_graph(canvas: &mut Canvas<Window>, scores: &Scores) {
 	canvas.set_draw_color(Color::RGB(0, 0, 0));
 	canvas.clear();
 
-	draw_notes(canvas, scores);
+	//draw_notes(canvas, scores);
+	draw_fourier(canvas, scores);
 
 	// Flush
 	canvas.present();
@@ -236,38 +236,42 @@ fn draw_fourier(canvas: &mut Canvas<Window>, scores: &Scores) {
 
 	canvas.set_draw_color(Color::RGB(30, 255, 30));
 
+	// Skip boring frequencies
+	// change values to draw on a log scale
+	// boost large frequencies for prettier graph
 	let fourier = scores
 		.fourier
 		.iter()
 		.skip(30)
 		.cloned()
-		.map(|mut c| {
-			c.im = c.im * c.re;
-			c.re = c.re.ln();
-			c
+		.map(|mut f| {
+			f.intensity = f.amplitude() * f.value;
+			f.value = f.value.ln();
+			f
 		})
 		.collect_vec();
 
 	// Get maximum frequency (alway the same)
-	let min_hz = fourier.first().unwrap().re;
-	let max_hz = fourier.last().unwrap().re;
+	let min_hz = fourier.first().unwrap().value;
+	let max_hz = fourier.last().unwrap().value;
 
 	// Get maximum intensity (varies with time)
 	let max_vo = fourier
 		.iter()
-		.max_by(|a, b| a.im.partial_cmp(&b.im).unwrap())
+		.max_by(|a, b| a.intensity.partial_cmp(&b.intensity).unwrap())
 		.unwrap()
-		.im;
+		.intensity;
 
 	// Draw uncorrected frequencies
 	let points = scores
 		.fourier
 		.iter()
-		.map(|c| {
-			let im = c.im / crate::fourier::a_weigh_frequency(c.re);
+		.map(|f| {
+			// apply reverse correction
+			let i = f.intensity / crate::fourier::a_weigh_frequency(f.value);
 			Point::new(
-				map(c.re, min_hz..max_hz, 0..FOURIER_WIDTH as i32 - 1, false),
-				map(im, 0f32..max_vo, 0..FOURIER_HEIGHT as i32 - 1, true),
+				map(f.value, min_hz..max_hz, 0..FOURIER_WIDTH as i32 - 1, false),
+				map(i, 0f32..max_vo, 0..FOURIER_HEIGHT as i32 - 1, true),
 			)
 		})
 		.collect::<Vec<Point>>();
@@ -282,8 +286,8 @@ fn draw_fourier(canvas: &mut Canvas<Window>, scores: &Scores) {
 		.iter()
 		.map(|c| {
 			Point::new(
-				map(c.re, min_hz..max_hz, 0..FOURIER_WIDTH as i32 - 1, false),
-				map(c.im, 0f32..max_vo, 0..FOURIER_HEIGHT as i32 - 1, true),
+				map(c.value, min_hz..max_hz, 0..FOURIER_WIDTH as i32 - 1, false),
+				map(c.intensity, 0f32..max_vo, 0..FOURIER_HEIGHT as i32 - 1, true),
 			)
 		})
 		.collect::<Vec<Point>>();
@@ -382,10 +386,8 @@ pub fn draw_score_octave_graph(canvas: &mut Canvas<Window>, scores: &Scores) {
 		.map(|x| {
 			let hz = crate::notes::Note::E3.freq() * 2f32.powf(x as f32 / FOURIER_WIDTH as f32);
 			let mut score = 0f32;
-			for &Complex { re: a, im: b } in scores.fourier.iter() {
-				if b > 0.1f32 {
-					score += crate::dissonance::estimate(a, hz) * b;
-				}
+			for &Frequency{value:f, intensity:i} in scores.fourier.iter() {
+				score += crate::dissonance::estimate(f, hz) * i;
 			}
 			score
 		})

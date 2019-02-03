@@ -16,6 +16,7 @@ mod dissonance;
 mod fourier;
 mod notes;
 mod scores;
+mod frequency;
 
 use self::audio_buffer::{AudioBuffer, BufferOptions};
 use self::display::DisplayOptions;

@@ -9,9 +9,11 @@ use itertools::Itertools;
 use rustfft::num_complex::Complex;
 use rustfft::FFTplanner;
 
-//Create
+//Crate
 use crate::audio_buffer::AudioBuffer;
-use crate::scores::{calculate, Scores};
+use crate::scores;
+use crate::scores::Scores;
+use crate::frequency::Frequency;
 
 // Receives audio input, start FFT on most recent data and send results
 pub fn fourier_thread(buffer: AudioBuffer, sender: Sender<Scores>, freq: i32, zpadding: u32) {
@@ -26,74 +28,65 @@ pub fn fourier_thread(buffer: AudioBuffer, sender: Sender<Scores>, freq: i32, zp
 	// Extract frequencies to serve as mask
 	let mask = None; //Some(&fourier_analysis(&vec[..], &mut planner, None));
 
-	// Start analysis loop
-	println!("Starting analysis");
-	loop {
-		// Aggregate all pending input
-		let vec = buffer.take();
-		// Apply fft and extract frequencies
-		let fourier = fourier_analysis(&vec[..], &mut planner, freq, mask, zpadding);
-		// Calculate dissonance of each note
-		let scores = calculate(fourier);
+    // Start analysis loop
+    println!("Starting analysis");
+    loop {
+        // Aggregate all pending input
+        let vec = buffer.take();
+        // Apply fft and extract frequencies
+        let fourier = fourier_analysis(&vec[..], &mut planner, freq, mask, zpadding);
+        // Calculate dissonance of each note
+        let scores = scores::calculate(fourier);
 		// Send
 		sender.send(scores).ok();
 	}
 }
 
 fn fourier_analysis(
-	vec: &[f32],
-	planner: &mut FFTplanner<f32>,
+    vec: &[f32],
+    planner: &mut FFTplanner<f32>,
 	freq: i32,
-	mask: Option<&Vec<Complex<f32>>>,
+    mask: Option<&[Frequency]>,
 	zpadding: u32,
-) -> Vec<Complex<f32>> {
-	// Setup fft parameters
-	let len = vec.len() * zpadding as usize;
-	let mut fft_in = vec
-		.iter()
-		.map(|&f| Complex { re: f, im: 0f32 })
-		.collect_vec();
+) -> Vec<Frequency> {
+    // Setup fft parameters
+	let real_len = vec.len();
+	let len = real_len * zpadding as usize;
+    let mut fft_in = vec
+        .iter()
+        .map(|&f| Complex { re: f, im: 0f32 })
+        .collect_vec();
 	fft_in.resize(len, Complex::default());
-	let mut fft_out = vec![Complex::default(); len];
-	let fft = planner.plan_fft(len);
+    let mut fft_out = vec![Complex::default(); len];
+    let fft = planner.plan_fft(len);
 
 	// Process fft
 	fft.process(&mut fft_in, &mut fft_out);
 
-	// Discard useless data
-	fft_out.truncate(len / 2);
-	fft_out.remove(0);
-	// Map results to frequencies and intensity
-	for (c, i) in fft_out.iter_mut().zip(1..) {
-		// Calculate intensity
-		// FACTOR A norm_sqr vs sqr ?
-		c.im = c.norm_sqr(); // (*a * *a + c.im * c.im).sqrt();
-					   // Calculate frequency
-		c.re = i as f32 * freq as f32 / len as f32 / zpadding as f32;
-		// Noise masking, currently unused
-		if let Some(vec) = mask {
-			if c.im > vec[i - 1].im {
-				c.im -= vec[i - 1].im;
-			} else {
-				c.im = 0f32;
-			}
-		}
-		// Reducing intensity of frequencies out of human hearing range
-		// FACTOR B a_weighing and how much
-		c.im *= a_weigh_frequency(c.re);
-	}
+    // Discard useless data
+    fft_out.truncate(len / 2);
+    // Map results to frequencies and intensity, skipping the first element (0hz)
+    fft_out.iter().enumerate().skip(1).map(|(i, c)| {
 
-	// Sort by intensity
-	//fft_out.sort_by(|b, a| a.im.partial_cmp(&b.im).unwrap());
-
-	// print 9 most intense frequencies (you'll never believe number 4)
-	// for &Complex{re:a, im:b} in fft_out.iter().take(9)
-	// {
-	//	 print!("{:^5.0}:{:^6.2} ", a, b);
-	// }
-	// println!("");
-
-	fft_out
+        // Calculate intensity
+		// FACTOR A norm_sqr vs sqr ?	
+        let mut intensity = c.norm_sqr();// (*a * *a + c.im * c.im).sqrt();
+        // Calculate frequency
+        let frequency = i as f32 * freq as f32 / real_len as f32;
+        // Noise masking, currently unused
+        if let Some(vec) = mask {
+            if intensity > vec[i - 1].intensity {
+                intensity -= vec[i - 1].intensity;
+            } else {
+                intensity = 0f32;
+            }
+        }
+        // Reducing intensity of frequencies out of human hearing range
+		// FACTOR B a_weighing and how much 
+        intensity *= a_weigh_frequency(c.re);
+		// Build intensity/value couple
+		Frequency { intensity, value:frequency }
+    }).collect_vec()
 }
 
 // https://fr.mathworks.com/matlabcentral/fileexchange/46819-a-weighting-filter-with-matlab
