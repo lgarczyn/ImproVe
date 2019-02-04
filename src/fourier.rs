@@ -50,8 +50,7 @@ fn fourier_analysis(
 	zpadding: u32,
 ) -> Vec<Frequency> {
     // Setup fft parameters
-	let real_len = vec.len();
-	let len = real_len * zpadding as usize;
+	let len = vec.len() * zpadding as usize;
     let mut fft_in = vec
         .iter()
         .map(|&f| Complex { re: f, im: 0f32 })
@@ -72,7 +71,7 @@ fn fourier_analysis(
 		// FACTOR A norm_sqr vs sqr ?	
         let mut intensity = c.norm_sqr();// (*a * *a + c.im * c.im).sqrt();
         // Calculate frequency
-        let frequency = i as f32 * freq as f32 / real_len as f32;
+        let frequency = i as f32 * freq as f32 / len as f32;
         // Noise masking, currently unused
         if let Some(vec) = mask {
             if intensity > vec[i - 1].intensity {

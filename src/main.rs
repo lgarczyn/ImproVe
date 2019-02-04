@@ -1,3 +1,7 @@
+// Macro crates
+#[macro_use(lazy_static)]
+extern crate lazy_static;
+
 // Standard
 use std::sync::mpsc::{channel, Sender};
 
@@ -57,7 +61,7 @@ fn main() -> Result<(), String> {
 					 write more stuff\n",
 				)
 				.next_line_help(true)
-				.default_value("2")
+				.default_value("1")
 				.validator(|s| match s.parse::<u32>() {
 					Ok(1..=32) => Ok(()),
 					Ok(_) => Err("Argument out of range: (1 .. 32)".to_owned()),
