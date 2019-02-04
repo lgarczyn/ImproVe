@@ -1,6 +1,6 @@
 
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Frequency {
 	pub value:f32,
 	pub intensity:f32

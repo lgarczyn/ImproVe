@@ -17,7 +17,6 @@ use sdl2::Sdl;
 
 use crate::display::DisplayOptions;
 use crate::scores::Scores;
-use crate::frequency::Frequency;
 
 // Guitar constants
 
@@ -328,88 +327,6 @@ pub fn draw_pure_dissonance_graph(canvas: &mut Canvas<Window>, _: &Scores) {
 }
 
 #[allow(dead_code)]
-pub fn draw_major_chord_graph(canvas: &mut Canvas<Window>, _: &Scores) {
-	let points = (0..FOURIER_WIDTH as i32)
-		.map(|x| {
-			let factor = 9f32 * x as f32 / FOURIER_WIDTH as f32;
-			let yf = 1f32 - (crate::dissonance::estimate(440f32, 440f32 * factor)) * 2f32;
-			let y = (yf * FOURIER_HEIGHT as f32) as i32;
-			Point::new(x, y)
-		})
-		.collect_vec();
-
-	canvas.set_draw_color(Color::RGB(255, 255, 255));
-
-	canvas.draw_lines(points.as_slice()).unwrap();
-
-	let points = (0..FOURIER_WIDTH as i32)
-		.map(|x| {
-			let factor = 9f32 * x as f32 / FOURIER_WIDTH as f32;
-			let yf = 1f32
-				- (crate::dissonance::estimate(
-					crate::notes::Note::C4.freq(),
-					crate::notes::Note::C4.freq() * factor,
-				)) * 2f32;
-			let y = (yf * FOURIER_HEIGHT as f32) as i32;
-			Point::new(x, y)
-		})
-		.collect_vec();
-
-	canvas.set_draw_color(Color::RGB(255, 0, 255));
-
-	canvas.draw_lines(points.as_slice()).unwrap();
-
-	let points = (0..FOURIER_WIDTH as i32)
-		.map(|x| {
-			let factor = 9f32 * x as f32 / FOURIER_WIDTH as f32;
-			let yf = 1f32
-				- (crate::dissonance::estimate(
-					crate::notes::Note::A5.freq(),
-					crate::notes::Note::A5.freq() * factor,
-				)) * 2f32;
-			let y = (yf * FOURIER_HEIGHT as f32) as i32;
-			Point::new(x, y)
-		})
-		.collect_vec();
-
-	canvas.set_draw_color(Color::RGB(255, 255, 0));
-
-	canvas.draw_lines(points.as_slice()).unwrap();
-}
-
-#[allow(dead_code)]
-pub fn draw_score_octave_graph(canvas: &mut Canvas<Window>, scores: &Scores) {
-	let notes = (0..FOURIER_WIDTH)
-		.map(|x| {
-			let hz = crate::notes::Note::E3.freq() * 2f32.powf(x as f32 / FOURIER_WIDTH as f32);
-			let mut score = 0f32;
-			for &Frequency{value:f, intensity:i} in scores.fourier.iter() {
-				score += crate::dissonance::estimate(f, hz) * i;
-			}
-			score
-		})
-		.collect_vec();
-
-	let mut min = std::f32::INFINITY;
-	let mut max = std::f32::NEG_INFINITY;
-
-	for &score in notes.iter() {
-		min = min.min(score);
-		max = max.max(score);
-	}
-
-	let points = notes
-		.into_iter()
-		.enumerate()
-		.map(|(x, s)| Point::new(x as i32, map(s, min..max, 0..FOURIER_HEIGHT as i32, true)))
-		.collect_vec();
-
-	canvas.set_draw_color(Color::RGB(255, 255, 0));
-
-	canvas.draw_lines(points.as_slice()).unwrap();
-}
-
-#[allow(dead_code)]
 pub fn draw_notes(canvas: &mut Canvas<Window>, scores: &Scores) {
 
 	let mut min = std::f32::INFINITY;
@@ -429,28 +346,4 @@ pub fn draw_notes(canvas: &mut Canvas<Window>, scores: &Scores) {
 	canvas.set_draw_color(Color::RGB(255, 255, 255));
 
 	canvas.draw_lines(points.as_slice()).unwrap();
-}
-
-#[allow(dead_code)]
-pub fn draw_freq_map(canvas: &mut Canvas<Window>, _scores: &Scores) {
-	for x in 0..FOURIER_WIDTH {
-		for y in 0..FOURIER_HEIGHT {
-			let xf = map(
-				x,
-				0..FOURIER_WIDTH,
-				crate::notes::Note::E1.freq()..crate::notes::Note::E8.freq(),
-				false,
-			);
-			let yf = map(
-				y,
-				0..FOURIER_HEIGHT,
-				crate::notes::Note::E1.freq()..crate::notes::Note::E8.freq(),
-				false,
-			);
-			let dis = crate::dissonance::estimate(xf, yf);
-			let i = map(dis, 0f32..1f32, 0..255u32, false) as u8;
-			canvas.set_draw_color(Color::RGB(i, 255 - i, 126));
-			canvas.draw_point(Point::new(x as _, y as _)).unwrap();
-		}
-	}
 }

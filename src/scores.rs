@@ -13,11 +13,7 @@ pub fn calculate(frequencies: Vec<Frequency>) -> Scores {
 
     // For every note, calculate dissonance score
     for note in Note::iter() {
-        let mut score = 0f32;
-        let hz = note.freq();
-        for &Frequency { value: f, intensity: i } in frequencies.iter() {
-            score += i * dissonance::estimate(f, hz);
-        }
+        let score = dissonance::dissonance_note(frequencies.as_slice(), note);
         notes[note as usize] = score;
     }
 
@@ -40,8 +36,6 @@ pub fn calculate(frequencies: Vec<Frequency>) -> Scores {
     // Normalize score
     for score in notes.iter_mut() {
         *score = (*score - min) / amplitude;
-        // FACTOR H square rooting scores 
-        //*score = score.powf(0.5f32);
     }
     Scores{notes, fourier:frequencies}
 }
