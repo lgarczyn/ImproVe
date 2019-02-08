@@ -9,7 +9,8 @@ pub struct Scores {
 }
 
 pub struct ScoreCalculator {
-    dissonance_values: Vec<Vec<f32>>
+    dissonance_values: Vec<Vec<f32>>,
+    prev_score: [f32; NOTE_COUNT],
 }
 
 impl ScoreCalculator {
@@ -18,7 +19,8 @@ impl ScoreCalculator {
         let dissonance_values = dissonance::dissonance_scores(heard);
         
         ScoreCalculator {
-            dissonance_values
+            dissonance_values,
+            prev_score: [0f32; NOTE_COUNT],
         } 
     }
 
@@ -36,19 +38,21 @@ impl ScoreCalculator {
         score
     }
 
-    pub fn calculate(&self, heard:Vec<Frequency>) -> Scores {
+    pub fn calculate(&mut self, heard:Vec<Frequency>) -> Scores {
         let mut notes = [0f32; NOTE_COUNT];
 
         for note in Note::iter() {
             let score = self.calculate_note(heard.as_slice(), note);
-            notes[note as usize] = score;
+            notes[note as usize] = score * 0.1 + self.prev_score[note as usize] * 0.9;
         }
+
+        self.prev_score = notes;
 
         let mut average = notes[0];
 
         for score in notes.iter_mut() {
-            average = average * 0.7f32 + *score * 0.3f32;
-            *score -= average; 
+           average = average * 0.7f32 + *score * 0.3f32;
+           *score -= average; 
         }
 
         let mut min = std::f32::INFINITY;
@@ -67,7 +71,6 @@ impl ScoreCalculator {
         
             if score.is_nan() {
                 println!("WTF {} {} {} {}", score, min, max, amplitude);
-                panic!();
             }
         }
 

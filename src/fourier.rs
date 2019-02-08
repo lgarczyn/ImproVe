@@ -28,7 +28,7 @@ pub fn fourier_thread(buffer: AudioBuffer, sender: Sender<Scores>, freq: i32, zp
     let fourier = fourier_analysis(&vec[..], &mut planner, freq, None, zpadding);
 	let mask = Some(fourier.as_slice());
     // Create a dissonance calculator from the frequencies
-    let calculator = ScoreCalculator::new(fourier.as_slice());
+    let mut calculator = ScoreCalculator::new(fourier.as_slice());
 
     // Start analysis loop
     println!("Starting analysis");
