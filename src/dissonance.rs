@@ -21,6 +21,14 @@ use crate::notes::{Note, NOTE_COUNT};
 // Calculates the perceived dissonance between two pure frequencies
 // source: https://books.google.fr/books?id=W2_n1R5F2XoC&lpg=PA202&ots=Pp8UydRXiK&dq=%22plomb-levelt%22%20curve%20formula&pg=PA202#v=onepage&q&f=false
 
+// The consts from the PL formula
+const A:f32 = 3.5;
+const B:f32 = 5.75;
+const D_S:f32 = 0.24;
+const S1:f32 = 0.021;
+const S2:f32 = 19.0;
+
+// The formular
 pub fn dissonance(f_1:f32, f_2:f32, ) -> f32 {
 
 	// The consts from the PL formula
@@ -39,99 +47,84 @@ pub fn dissonance(f_1:f32, f_2:f32, ) -> f32 {
 	consts::E.powf(-A * exp) - consts::E.powf(-B * exp)
 }
 
-// Calculates the dissonance between a list of frequencies and a synthesized note
-pub fn dissonance_note(heard:&[Frequency], note:Note) -> f32 {
+pub fn dissonance_opt(f_1:f32, s_1:f32, f_2:f32, s_2:f32) -> f32 {
 
-	dissonance_complex(heard, &NOTE_HARMONICS[note as usize])
+	// Chose the cached 's' value of the smallest frequency
+	let s = if f_1 > f_2 {
+		s_1
+	} else {
+		s_2
+	};
+
+	//assert!(s == (D_S / (S1 * f_1.min(f_2) + S2)));
+	
+	// Calculate the 'exp' component
+	let exp = (f_1 - f_2).abs() * s;
+	// If result is negligeable, return 0
+	if exp > 1f32 {
+		0f32
+	} else {
+		consts::E.powf(-A * exp) - consts::E.powf(-B * exp)
+	}
 }
 
-// The same function as dissonance, but optimized for large amount of data
-pub fn dissonance_complex(heard:&[Frequency], played:&[Frequency]) -> f32 {
-	const D_S:f32 = 0.24;
-	const S1:f32 = 0.021;
-	const S2:f32 = 19.0;
+
+
+// Returns a 2D array mapping played notes and frequency index to dissonance score
+pub fn dissonance_scores(heard:&[Frequency]) -> Vec<Vec<f32>> {
+
+	// Note that the intensity of the 'heard' frequency is ignored here
+	// We are only building a table of the scores of those frequencies
+
+	// Get instrument frequencies
+	let harmonics = get_notes_harmonics();
 
 	// For each heard frequency, cache the 's' value of the PL curve
 	let heard_buffered = heard.iter().cloned().map(|f| {
 		let s = D_S / (S1 * f.value + S2);
 		(f, s)
-	});
-
-	// For every played frequencies, cache the same value
-	let played_buffered = played.iter().cloned().map(|f| {
-		let s = D_S / (S1 * f.value + S2);
-		(f, s)
 	}).collect_vec();
 
-	// Iterate on every frequency heard
-	// Could be optimized if we have more information on data sortedness
-	let mut score = 0f32;
-	for (f_h, s_h) in heard_buffered {
-		// Accumulates the score for a single heard frequency
-		let mut heard_score = 0f32;
+	// Prepare the 2D array
+	let mut scores = vec![Vec::with_capacity(heard.len()); NOTE_COUNT];
 
-		// TODO: remove magic numbers
-		// ignore barely audible frequencies
-		if f_h.intensity < 0.0001f32 {
-			continue;
-		}
+	// For every note the user could play
+	for note in Note::iter() {
 
-		// Iterate again on every predicted frequencies
-		for (f_p, s_p) in played_buffered.iter().cloned() {
-			// Chose the cached 's' value of the smallest frequency
-			let s = if f_h.value > f_p.value {
-				s_p
-			} else {
-				s_h
-			};
+		let played = harmonics[note as usize];
 
-			//assert!(s == (D_S / (S1 * f_h.min(f_p) + S2)));
-			
-			// Calculate the 'exp' component
-			let exp = (f_h.value - f_p.value).abs() * s;
-			if exp > POW_MAX_INPUT as f32 {
-				continue;
+		// For every played frequencies, cache the same s value
+		let played_buffered = played.iter().cloned().map(|f| {
+			let s = D_S / (S1 * f.value + S2);
+			(f, s)
+		}).collect_vec();
+
+		// For every frequency heard, calculate the dissonance to the note
+		for (f_h, s_h) in heard_buffered.iter().cloned() {
+			// Accumulator for the dissonance to the note
+			let mut heard_score = 0f32;
+
+			// For every frequency of the note
+			for (f_p, s_p) in played_buffered.iter().cloned() {
+				//Calculate dissonance
+				let res = dissonance_opt(f_h.value, s_h, f_p.value, s_p);
+
+				// Add the dissonance scores to the heard frequency score 
+				heard_score += res * f_p.intensity;
 			}
-			// Use component as index to lookup table
-			let res = POW_LOOKUP[(exp * POW_RESOLUTION as f32) as usize];
-
-			//assert!((res - consts::E.powf(-A * exp) + consts::E.powf(-B * exp)).abs() < 0.01f32);
-			
-			// Add the dissonance score to the pile
-			heard_score += res * f_p.intensity;
+			// Push to the lookup table
+			scores[note as usize].push(heard_score);
 		}
-		// Multiply all dissonance scores for the frequency heard
-		// by its intensity, than add to global dissonance score 
-		score += heard_score * f_h.intensity;
 	}
-	score
-}
-
-// How many lookup table elements for one unit
-const POW_RESOLUTION:usize = 1000;
-// The max exp value used as indexing
-const POW_MAX_INPUT:usize = 1;
-// More PL formula const, as they cannot be placed inside the lazy_static
-const A:f32 = 3.5;
-const B:f32 = 5.75;
-
-lazy_static! {
-	// The lookup table for the expensive last step
-	static ref POW_LOOKUP:Vec<f32> = (0 .. POW_RESOLUTION * POW_MAX_INPUT)
-		.map(|i| (i as f32 + 0.5) / POW_RESOLUTION as f32 )
-		.map(|f| (consts::E.powf(-A * f) - consts::E.powf(-B * f)))
-		.collect_vec();
-	
-	// The cached instruments components for each note
-	static ref NOTE_HARMONICS:[[Frequency;FC]; NOTE_COUNT] = get_notes_harmonics();
+	scores
 }
 
 // The number of harmonics to generate on one side of the main frequency
-const HARMONIC_COUNT:usize = 30;
+const HARMONIC_COUNT:usize = 300;
 const FC:usize = HARMONIC_COUNT * 2 + 1;
 
 // Get a simulated instrument's frequency components
-fn get_notes_harmonics() -> [[Frequency;FC]; NOTE_COUNT] {
+pub fn get_notes_harmonics() -> [[Frequency;FC]; NOTE_COUNT] {
 	let mut array:[[Frequency;FC]; NOTE_COUNT] = [[Frequency::default();FC]; NOTE_COUNT];
 
 	for note in Note::iter() {

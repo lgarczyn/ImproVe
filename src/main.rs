@@ -1,7 +1,3 @@
-// Macro crates
-#[macro_use(lazy_static)]
-extern crate lazy_static;
-
 // Standard
 use std::sync::mpsc::{channel, Sender};
 

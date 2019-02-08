@@ -163,6 +163,16 @@ fn draw_board(
 		)
 		.unwrap();
 
+	let mut min = std::f32::INFINITY;
+	let mut max = std::f32::NEG_INFINITY;
+
+
+	for i in STRINGS[0] as usize .. STRINGS[5] as usize + FRET_COUNT as usize {
+		let f = scores.notes[i];
+		min = min.min(f);
+		max = max.max(f);
+	}
+
 	// The canvas position
 	let mut pnt = Point::new(0, 0);
 
@@ -176,7 +186,7 @@ fn draw_board(
 			let texture = &texture_notes[i % 12];
 			let score = scores.notes[i];
 			// Write the name with the appropriate color
-			let score = score.max(0f32).min(1f32);
+			let score = (score - min) / (max - min);
 			let gradient = (score * 255f32) as u8;
 			let rect = Rect::new(pnt.x, pnt.y, FRET_WIDTH, STRING_HEIGHT);
 			canvas.set_draw_color(Color::RGB(gradient, 255 - gradient, gradient / 4));
@@ -195,25 +205,36 @@ fn draw_board(
 
 use num_traits::cast::{NumCast, ToPrimitive};
 use std::ops::Range;
+use std::fmt::Debug;
 
+// Map any numerical type from one range to another
+// Doesn't actually guarantee the ranges will stay exclusive
+// So use with care
 fn map<F, T>(f: F, from: Range<F>, into: Range<T>, inv: bool) -> T
 where
-	F: ToPrimitive,
-	T: ToPrimitive + NumCast,
+	F: ToPrimitive + Debug,
+	T: ToPrimitive + NumCast + Debug,
 {
-	let from: Range<f64> = from.start.to_f64().unwrap()..from.end.to_f64().unwrap();
-	let into: Range<f64> = into.start.to_f64().unwrap()..into.end.to_f64().unwrap();
-	let f: f64 = f.to_f64().unwrap();
+	let fromf: Range<f64> = from.start.to_f64().unwrap()..from.end.to_f64().unwrap();
+	let intof: Range<f64> = into.start.to_f64().unwrap()..into.end.to_f64().unwrap();
+	let ff: f64 = f.to_f64().unwrap();
 
-	let ratio = (f - from.start) / (from.end - from.start);
-	let mapped = ratio * (into.end - into.start);
+	let amplitude = (fromf.end - fromf.start) + std::f64::MIN_POSITIVE;
+	let ratio = (ff - fromf.start) / amplitude;
+	let mapped = ratio * (intof.end - intof.start);
 
 	let mapped = if inv {
-		into.end - mapped
+		intof.end - mapped
 	} else {
-		into.start + mapped
+		intof.start + mapped
 	};
-	T::from(mapped.round()).unwrap()
+	match T::from(mapped.round()) {
+		Some(mapped) => mapped,
+		None => {
+			eprintln!("could not cast {:?} from {:?} to {:?}", f, from, into);
+			T::from(into.start).unwrap()
+		}
+	}
 }
 
 fn draw_graph(canvas: &mut Canvas<Window>, scores: &Scores) {
@@ -222,7 +243,7 @@ fn draw_graph(canvas: &mut Canvas<Window>, scores: &Scores) {
 	canvas.set_draw_color(Color::RGB(0, 0, 0));
 	canvas.clear();
 
-	draw_fourier(canvas, scores);
+	draw_notes(canvas, scores);
 
 	// Flush
 	canvas.present();
@@ -338,7 +359,7 @@ pub fn draw_notes(canvas: &mut Canvas<Window>, scores: &Scores) {
 	}
 
 	let points = (0 .. FOURIER_WIDTH).map(|x| {
-		let i = map(x, 0 .. FOURIER_WIDTH, 0 .. scores.notes.len(), false);
+		let i = map(x, 0 .. FOURIER_WIDTH, 0 .. scores.notes.len() - 1, false);
 		let y = map(scores.notes[i], min .. max, 0 .. FOURIER_HEIGHT as i32, true);
 		Point::new(x as i32, y)
 	}).collect_vec();

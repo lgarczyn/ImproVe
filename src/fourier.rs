@@ -11,8 +11,7 @@ use rustfft::FFTplanner;
 
 //Crate
 use crate::audio_buffer::AudioBuffer;
-use crate::scores;
-use crate::scores::Scores;
+use crate::scores::{Scores, ScoreCalculator};
 use crate::frequency::Frequency;
 
 // Receives audio input, start FFT on most recent data and send results
@@ -22,11 +21,14 @@ pub fn fourier_thread(buffer: AudioBuffer, sender: Sender<Scores>, freq: i32, zp
 	// The audio buffer, to get uniformly-sized audio packets
 	let mut buffer = buffer;
 
+	println!("Gathering noise profile and buffering instrument");
 	// Get the first first few seconds of recording
-	println!("Gathering noise profile");
-	//let vec = buffer.take();
+	let vec = buffer.take();
 	// Extract frequencies to serve as mask
-	let mask = None; //Some(&fourier_analysis(&vec[..], &mut planner, None));
+    let fourier = fourier_analysis(&vec[..], &mut planner, freq, None, zpadding);
+	let mask = Some(fourier.as_slice());
+    // Create a dissonance calculator from the frequencies
+    let calculator = ScoreCalculator::new(fourier.as_slice());
 
     // Start analysis loop
     println!("Starting analysis");
@@ -36,7 +38,7 @@ pub fn fourier_thread(buffer: AudioBuffer, sender: Sender<Scores>, freq: i32, zp
         // Apply fft and extract frequencies
         let fourier = fourier_analysis(&vec[..], &mut planner, freq, mask, zpadding);
         // Calculate dissonance of each note
-        let scores = scores::calculate(fourier);
+        let scores = calculator.calculate(fourier);
 		// Send
 		sender.send(scores).ok();
 	}
