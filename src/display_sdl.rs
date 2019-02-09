@@ -375,7 +375,7 @@ pub fn draw_notes(canvas: &mut Canvas<Window>, scores: &Scores) {
 
 	let points = (0 .. FOURIER_WIDTH).map(|x| {
 		let i = map(x, 0 .. FOURIER_WIDTH, 0 .. scores.notes.len() - 1, false);
-		let y = map(scores.notes[i], min .. max, 0 .. FOURIER_HEIGHT as i32, true);
+		let y = map(scores.notes[i], min .. max, 0 .. FOURIER_HEIGHT as i32 - 1, true);
 		Point::new(x as i32, y)
 	}).collect_vec();
 

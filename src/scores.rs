@@ -5,6 +5,8 @@ use crate::notes::{Note, NOTE_COUNT};
 
 use itertools::Itertools;
 
+use std::time::Instant;
+
 pub struct Scores {
     pub notes: [f32; NOTE_COUNT],
     pub fourier: Vec<Frequency>,
@@ -13,6 +15,7 @@ pub struct Scores {
 pub struct ScoreCalculator {
     dissonance_values: Vec<Vec<f32>>,
     prev_score: [f32; NOTE_COUNT],
+    time: Instant
 }
 
 impl ScoreCalculator {
@@ -23,6 +26,7 @@ impl ScoreCalculator {
         ScoreCalculator {
             dissonance_values,
             prev_score: [0f32; NOTE_COUNT],
+            time: Instant::now()
         } 
     }
 
@@ -52,27 +56,46 @@ impl ScoreCalculator {
         // Time-wise walking average
         // An approximation of second-order beatings
         // Doesn't take into account the different type of dissonance
+
+        // Get time since last call
+        let time_since_last_call = self.time.elapsed();
+        let seconds = time_since_last_call.as_secs() as f32 + time_since_last_call.subsec_nanos() as f32 * 1e-9;
+        self.time = Instant::now();
+        // Get how much previous score should have faded (-30% per second)
+        let factor = 0.7f32.powf(seconds);
+        // Apply to each score
         for note in Note::iter() {
             let score = self.calculate_note(heard_sorted.as_slice(), note);
-            //if score > self.prev_score[note as usize] {
-            //    notes[note as usize] = score * 0.5 + self.prev_score[note as usize] * 0.5;
-            //} else {
-                notes[note as usize] = score * 0.1 + self.prev_score[note as usize] * 0.9;
-            //}
+            notes[note as usize] = score * (1f32 - factor) + self.prev_score[note as usize] * factor;
         }
 
         self.prev_score = notes;
 
         // Octave average (loses ton of information, but avoids eye strain in low-constrast regions)
 
-        let mut avg = [0f32; 12];
+        // let mut avg = [0f32; 12];
 
-        for (i, &score) in notes.iter().enumerate() {
-            avg[i % 12] += score / (notes.len() as f32 / 12.0);
+        // for (i, &score) in notes.iter().enumerate() {
+        //     avg[i % 12] += score / (notes.len() as f32 / 12.0);
+        // }
+
+        // for (i, score) in notes.iter_mut().enumerate() {
+        //     *score = avg[i % 12];
+        // }
+
+        // Octave rescaling
+        // Moves every scale to the same range (0 .. 1)
+        // Creates inconsistencies between octaves, but OK compromise
+
+        let mut minmax = [(0f32, 0f32); NOTE_COUNT / 12 + 1];
+
+        for (i, it) in notes.iter().chunks(12).into_iter().enumerate() {
+            minmax[i] = it.cloned().minmax().into_option().unwrap();
         }
 
         for (i, score) in notes.iter_mut().enumerate() {
-            *score = avg[i % 12];
+            let (min, max) = minmax[i / 12];
+            *score = (*score - min) / (max - min);
         }
 
         // Walking average (doesn't deal with varying amplitude)
