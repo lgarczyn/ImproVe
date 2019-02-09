@@ -35,7 +35,7 @@ fn guitar(scores: &[f32; NOTE_COUNT], options: DisplayOptions) {
 	for i in 1..GUITAR_STRING_LENGTH {
 		write!(&mut buffer, "{:^3}", i).unwrap();
 	}
-	write!(&mut buffer, "\n").unwrap();
+	writeln!(&mut buffer).unwrap();
 
 	// For every guitar strings
 	for &string in GUITAR_STRINGS.iter().rev() {

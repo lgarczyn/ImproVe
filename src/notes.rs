@@ -22,17 +22,17 @@ pub const BASE_NOTE: Note = Note::A4;
 pub const BASE_FREQUENCY: f32 = 440f32;
 
 impl Note {
-	pub fn freq(&self) -> f32 {
-		let half_tones = (*self) as i32 - BASE_NOTE as i32;
+	pub fn freq(self) -> f32 {
+		let half_tones = self as i32 - BASE_NOTE as i32;
 		BASE_FREQUENCY * 2f32.powf(half_tones as f32 / 12f32) 
 	}
 	pub fn iter() -> <Note as IntoEnumIterator>::Iterator {
 		Note::into_enum_iter()
 	}
-	pub fn iter_from(&self) -> std::iter::Skip<<Note as IntoEnumIterator>::Iterator> {
-		Note::into_enum_iter().skip(*self as usize)
+	pub fn iter_from(self) -> std::iter::Skip<<Note as IntoEnumIterator>::Iterator> {
+		Note::into_enum_iter().skip(self as usize)
 	}
-	pub fn get_octave_index(&self) -> u32 {
-		(*self as u32) % 12
+	pub fn get_octave_index(self) -> u32 {
+		(self as u32) % 12
 	}
 }

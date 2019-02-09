@@ -106,10 +106,9 @@ pub fn display(
 				.render(name)
 				.blended(Color::RGBA(30, 30, 30, 255))
 				.unwrap();
-			let texture = texture_creator
+			texture_creator
 				.create_texture_from_surface(&surface)
-				.unwrap();
-			texture
+				.unwrap()
 		})
 		.collect_vec();
 

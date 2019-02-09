@@ -8,7 +8,7 @@ pub struct Frequency {
 
 impl Frequency {
 	#[allow(dead_code)]
-	pub fn amplitude(&self) -> f32 {
+	pub fn amplitude(self) -> f32 {
 		self.intensity.sqrt()
 	}
 }

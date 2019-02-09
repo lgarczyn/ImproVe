@@ -93,9 +93,9 @@ fn fourier_analysis(
 // Reduce frequency intensity based on human perception
 pub fn a_weigh_frequency(freq: f32) -> f32 {
 	let c1 = 12194.217f32.powi(2);
-	let c2 = 20.598997f32.powi(2);
-	let c3 = 107.65265f32.powi(2);
-	let c4 = 737.86223f32.powi(2);
+	let c2 = 20.598_997f32.powi(2);
+	let c3 = 107.652_65f32.powi(2);
+	let c4 = 737.862_24f32.powi(2);
 	// Evaluate the A-weighting filter in the frequency domain
 	let freq = freq.powi(2);
 	let num = c1 * (freq.powi(2));

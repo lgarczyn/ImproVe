@@ -18,8 +18,8 @@ impl Notation {
 		let index = note.get_octave_index() as usize;
 		self.get_names()[index]
 	}
-	pub fn get_names(&self) -> [&str; 12] {
-		match &self {
+	pub fn get_names(self) -> [&'static str; 12] {
+		match self {
 			Notation::English => NOTE_NAMES_ENGLISH,
 			Notation::Romance => NOTE_NAMES_ROMANCE,
 		}

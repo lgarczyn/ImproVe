@@ -42,7 +42,7 @@ fn main() -> Result<(), String> {
 				.next_line_help(true)
 				.default_value("8192")
 				.validator(|s| match s.parse::<u32>() {
-					Ok(32..=1048576) => Ok(()),
+					Ok(32..=1_048_576) => Ok(()),
 					Ok(_) => Err("Argument out of range: (32 .. 1048576)".to_owned()),
 					Err(_) => Err("Argument is not an unsigned int".to_owned()),
 				}),
@@ -175,9 +175,9 @@ fn main() -> Result<(), String> {
 	});
 
 	if matches.is_present("terminal") {
-		return display_term::display(score_receiver, disp_opt);
+		display_term::display(score_receiver, disp_opt)
 	} else {
-		return display_sdl::display(sdl_context, score_receiver, disp_opt);
+		display_sdl::display(sdl_context, score_receiver, disp_opt)
 	}
 }
 
