@@ -39,47 +39,48 @@ impl ScoreCalculator {
 
         // Extrac indices for lookup table
         // Sort the array
-        // Skip lower half for noise reduction
+        // Possibly skip lower parts for noise reduction
         let heard_sorted = heard.iter()
             .cloned()
             .enumerate()
             .sorted_by_key(|(_, f)| *f)
-            .skip(heard.len() / 2)
-            .skip(heard.len() / 4)
-            .skip(heard.len() / 8)
+            // .skip(heard.len() / 2)
+            // .skip(heard.len() / 4)
+            // .skip(heard.len() / 8)
             .collect_vec();
 
+        // Time-wise walking average
+        // An approximation of second-order beatings
+        // Doesn't take into account the different type of dissonance
         for note in Note::iter() {
             let score = self.calculate_note(heard_sorted.as_slice(), note);
-            notes[note as usize] = score * 0.1 + self.prev_score[note as usize] * 0.9;
+            //if score > self.prev_score[note as usize] {
+            //    notes[note as usize] = score * 0.5 + self.prev_score[note as usize] * 0.5;
+            //} else {
+                notes[note as usize] = score * 0.1 + self.prev_score[note as usize] * 0.9;
+            //}
         }
 
         self.prev_score = notes;
 
-        let mut average = notes[0];
+        // Octave average (loses ton of information, but avoids eye strain in low-constrast regions)
 
-        for score in notes.iter_mut() {
-            average = average * 0.7f32 + *score * 0.3f32;
-            *score -= average; 
+        let mut avg = [0f32; 12];
+
+        for (i, &score) in notes.iter().enumerate() {
+            avg[i % 12] += score / (notes.len() as f32 / 12.0);
         }
 
-        let (min, max) = notes
-            .iter().cloned()
-            .minmax()
-            .into_option()
-            .unwrap();
-        
-        // Get amplitude to normalize
-        let amplitude = max - min + 0.0001f32;
-        // Normalize score
-        for score in notes.iter_mut() {
-            *score = (*score - min) / amplitude;
-
-        
-            if score.is_nan() {
-                println!("WTF {} {} {} {}", score, min, max, amplitude);
-            }
+        for (i, score) in notes.iter_mut().enumerate() {
+            *score = avg[i % 12];
         }
+
+        // Walking average (doesn't deal with varying amplitude)
+        // let mut average = notes[0];
+        // for score in notes.iter_mut() {
+        //     average = average * 0.7f32 + *score * 0.3f32;
+        //     *score -= average; 
+        // }
 
         Scores{notes, fourier:heard}
     }

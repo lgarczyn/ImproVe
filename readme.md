@@ -38,6 +38,7 @@ Run with `cargo run`, help with `cargo run -- -h`
 * Better smoothing of dissonance curve over octaves
 * Note graph adjusting to max amplitude not current amplitude
 * Changing the ratio of discarded frequencies
+* Chord display
 
 ### Code
 
