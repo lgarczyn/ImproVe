@@ -23,7 +23,7 @@ pub fn fourier_thread(buffer: AudioBuffer, sender: Sender<Scores>, freq: i32, zp
 
 	println!("Gathering noise profile and buffering instrument");
 	// Get the first first few seconds of recording
-	let vec = buffer.take();
+	let vec = buffer.take().unwrap();
 	// Extract frequencies to serve as mask
     let fourier = fourier_analysis(&vec[..], &mut planner, freq, None, zpadding);
 	let mask = Some(fourier.as_slice());
@@ -32,9 +32,8 @@ pub fn fourier_thread(buffer: AudioBuffer, sender: Sender<Scores>, freq: i32, zp
 
     // Start analysis loop
     println!("Starting analysis");
-    loop {
-        // Aggregate all pending input
-        let vec = buffer.take();
+    // While audio buffer can still output data
+    while let Some(vec) = buffer.take() {
         // Apply fft and extract frequencies
         let fourier = fourier_analysis(&vec[..], &mut planner, freq, mask, zpadding);
         // Calculate dissonance of each note

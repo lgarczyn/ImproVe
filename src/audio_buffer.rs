@@ -26,7 +26,8 @@ impl AudioBuffer {
 	// Return n elements, n being options.resolution
 	// If options.discard is true, overwrite old elements
 	// If options.overlap is true, don't delete read elements
-	pub fn take(&mut self) -> Vec<f32> {
+	// When receiver dies and data is exhausted, start returning None
+	pub fn take(&mut self) -> Option<Vec<f32>> {
 		// Set n as the previously received packet resolution
 		let n = self.options.resolution;
 		// Read all waiting packets
@@ -35,7 +36,8 @@ impl AudioBuffer {
 		}
 		// Make sure buffer contains at least n elements
 		while self.buffer.len() < n {
-			self.buffer.extend(self.receiver.recv().unwrap());
+			let recv = self.receiver.recv().ok()?;
+			self.buffer.extend(recv);
 		}
 		// If discard is on, discard surplus data
 		if self.options.discard && self.buffer.len() > n {
@@ -50,10 +52,10 @@ impl AudioBuffer {
 			let surplus = surplus.min(n);
 			// Delete surplus data
 			self.buffer.drain(0..surplus);
-			ret
+			Some(ret)
 		// If overlap is not allowed, remove them before returning
 		} else {
-			self.buffer.drain(0..n).collect()
+			Some(self.buffer.drain(0..n).collect())
 		}
 	}
 }
