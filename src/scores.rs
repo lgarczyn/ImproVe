@@ -3,6 +3,8 @@ use crate::frequency::Frequency;
 
 use crate::notes::{Note, NOTE_COUNT};
 
+use itertools::Itertools;
+
 pub struct Scores {
     pub notes: [f32; NOTE_COUNT],
     pub fourier: Vec<Frequency>,
@@ -24,16 +26,10 @@ impl ScoreCalculator {
         } 
     }
 
-    pub fn calculate_note(&self, heard:&[Frequency], note:Note) -> f32 {
+    pub fn calculate_note(&self, heard:&[(usize, Frequency)], note:Note) -> f32 {
         let mut score = 0f32;
-        for (i, &f) in heard.iter().enumerate() {
-
-            //TODO remove magic number
-            // ignore low-intensity frequencies
-            if f.intensity < 0.0001f32 {
-                continue;
-            }
-            score += f.intensity * self.dissonance_values[note as usize][i];
+        for &(u, f) in heard.iter() {
+            score += f.intensity * self.dissonance_values[note as usize][u];
         }
         score
     }
@@ -41,8 +37,20 @@ impl ScoreCalculator {
     pub fn calculate(&mut self, heard:Vec<Frequency>) -> Scores {
         let mut notes = [0f32; NOTE_COUNT];
 
+        // Extrac indices for lookup table
+        // Sort the array
+        // Skip lower half for noise reduction
+        let heard_sorted = heard.iter()
+            .cloned()
+            .enumerate()
+            .sorted_by_key(|(_, f)| *f)
+            .skip(heard.len() / 2)
+            .skip(heard.len() / 4)
+            .skip(heard.len() / 8)
+            .collect_vec();
+
         for note in Note::iter() {
-            let score = self.calculate_note(heard.as_slice(), note);
+            let score = self.calculate_note(heard_sorted.as_slice(), note);
             notes[note as usize] = score * 0.1 + self.prev_score[note as usize] * 0.9;
         }
 
@@ -51,17 +59,16 @@ impl ScoreCalculator {
         let mut average = notes[0];
 
         for score in notes.iter_mut() {
-           average = average * 0.7f32 + *score * 0.3f32;
-           *score -= average; 
+            average = average * 0.7f32 + *score * 0.3f32;
+            *score -= average; 
         }
 
-        let mut min = std::f32::INFINITY;
-        let mut max = std::f32::NEG_INFINITY;
-
-        for &score in notes.iter() {
-            min = min.min(score);
-            max = max.max(score);
-        }
+        let (min, max) = notes
+            .iter().cloned()
+            .minmax()
+            .into_option()
+            .unwrap();
+        
         // Get amplitude to normalize
         let amplitude = max - min + 0.0001f32;
         // Normalize score

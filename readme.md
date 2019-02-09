@@ -26,9 +26,20 @@ You also need cargo, but that's a bit of a given for any rust project.
 
 Run with `cargo run`, help with `cargo run -- -h`
 
-### To Do
+## To Do
+
+### Features
 
 * Audio feedback mode ?
-* Try adding a better dissonance model, using a sample of the targeted instrument
+* Use a sample of the targeted instrument
+* Change the dissonance half-life
+* Change key parameters at runtime
 * other displays than guitar
-* other instruments models
+* Better smoothing of dissonance curve over octaves
+* Note graph adjusting to max amplitude not current amplitude
+* Changing the ratio of discarded frequencies
+
+### Code
+
+* use Clippy to clean bad practice
+* apply fmt more rigorously

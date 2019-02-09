@@ -175,15 +175,12 @@ fn draw_board(
 		)
 		.unwrap();
 
-	let mut min = std::f32::INFINITY;
-	let mut max = std::f32::NEG_INFINITY;
 
-
-	for i in FIRST_NOTE .. LAST_NOTE as usize {
-		let f = scores.notes[i];
-		min = min.min(f);
-		max = max.max(f);
-	}
+	let (min, max) = scores.notes[FIRST_NOTE .. LAST_NOTE]
+		.iter()
+		.minmax()
+		.into_option()
+		.unwrap();
 
 	let gradient_a = Hsv::new(120.0, 1.0, 1.0);
 	let gradient_b = Hsv::new(0.0, 1.0, 1.0);
@@ -298,7 +295,7 @@ fn draw_fourier(canvas: &mut Canvas<Window>, scores: &Scores) {
 	// Get maximum intensity (varies with time)
 	let max_vo = fourier
 		.iter()
-		.max_by(|a, b| a.intensity.partial_cmp(&b.intensity).unwrap())
+		.max()
 		.unwrap()
 		.intensity;
 
@@ -371,13 +368,11 @@ pub fn draw_pure_dissonance_graph(canvas: &mut Canvas<Window>, _: &Scores) {
 #[allow(dead_code)]
 pub fn draw_notes(canvas: &mut Canvas<Window>, scores: &Scores) {
 
-	let mut min = std::f32::INFINITY;
-	let mut max = std::f32::NEG_INFINITY;
-
-	for &score in scores.notes.iter() {
-		min = min.min(score);
-		max = max.max(score);
-	}
+	let (min, max) = scores.notes
+		.iter().cloned()
+		.minmax()
+		.into_option()
+		.unwrap();
 
 	let points = (0 .. FOURIER_WIDTH).map(|x| {
 		let i = map(x, 0 .. FOURIER_WIDTH, 0 .. scores.notes.len() - 1, false);
