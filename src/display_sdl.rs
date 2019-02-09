@@ -1,9 +1,15 @@
 // The SDL display loop
 
+// Standard
 use std::sync::mpsc::Receiver;
 
+// Tools
 use itertools::Itertools;
+use palette::Hsv;
+use palette::Srgb;
+use palette::Gradient;
 
+// Sdl
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
@@ -15,27 +21,33 @@ use sdl2::video::Window;
 use sdl2::video::WindowPos;
 use sdl2::Sdl;
 
+// Crate
 use crate::display::DisplayOptions;
 use crate::scores::Scores;
+use crate::notes::Note::{*};
 
 // Guitar constants
 
 // The note for every guitar strings, from E2 to E4
-const STRINGS: [usize; 6] = [16 + 0, 16 + 5, 16 + 10, 16 + 15, 16 + 19, 16 + 24];
+const STRING_COUNT:usize = 6;
+const STRINGS: [usize; STRING_COUNT] = [E2 as usize, A2 as usize, D3 as usize, G3 as usize, B3 as usize, E4 as usize];
 
 // Dimensions in pixels for every fretboard elements
 const STRING_HEIGHT: u32 = 18;
-const STRING_COUNT: u32 = 6;
 const FRET_WIDTH: u32 = 27;
 const FRET_COUNT: u32 = 44;
 const FRET_LINE: u32 = 9;
 const FONT_HEIGHT: u16 = STRING_HEIGHT as u16 - 1;
 
+// Note range
+const FIRST_NOTE:usize = STRINGS[0];
+const LAST_NOTE:usize = STRINGS[STRING_COUNT - 1] + FRET_COUNT as usize;
+
 // Font asset
 const FONT_NAME: &str = "assets/UbuntuMono-R.ttf";
 
 // Board graph window dimensions
-const BOARD_HEIGHT: u32 = (STRING_COUNT + 1) * STRING_HEIGHT;
+const BOARD_HEIGHT: u32 = (STRING_COUNT as u32 + 1) * STRING_HEIGHT;
 const BOARD_WIDTH: u32 = (FRET_COUNT) * FRET_WIDTH + FRET_LINE;
 
 // Fourier graph dimensions
@@ -167,11 +179,15 @@ fn draw_board(
 	let mut max = std::f32::NEG_INFINITY;
 
 
-	for i in STRINGS[0] as usize .. STRINGS[5] as usize + FRET_COUNT as usize {
+	for i in FIRST_NOTE .. LAST_NOTE as usize {
 		let f = scores.notes[i];
 		min = min.min(f);
 		max = max.max(f);
 	}
+
+	let gradient_a = Hsv::new(120.0, 1.0, 1.0);
+	let gradient_b = Hsv::new(0.0, 1.0, 1.0);
+	let gradient = Gradient::new(vec![gradient_a, gradient_b]);
 
 	// The canvas position
 	let mut pnt = Point::new(0, 0);
@@ -186,10 +202,15 @@ fn draw_board(
 			let texture = &texture_notes[i % 12];
 			let score = scores.notes[i];
 			// Write the name with the appropriate color
+			// Get the score in the appropriate range
 			let score = (score - min) / (max - min);
-			let gradient = (score * 255f32) as u8;
+			// Get the colored rectangle coordinates
 			let rect = Rect::new(pnt.x, pnt.y, FRET_WIDTH, STRING_HEIGHT);
-			canvas.set_draw_color(Color::RGB(gradient, 255 - gradient, gradient / 4));
+			// Get the gradient color
+			let gradient_poll = gradient.get(score);
+			let color: (u8, u8, u8) = Srgb::from(gradient_poll).into_format().into_components();
+			// Draw tesxt and color to canvas	
+			canvas.set_draw_color(Color::from(color));
 			canvas.fill_rect(rect).unwrap();
 			canvas.copy(texture, None, Some(rect)).unwrap();
 			// Add the bar to differentiate the zero 'fret' from the rest
