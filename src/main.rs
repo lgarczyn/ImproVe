@@ -75,6 +75,25 @@ fn main() -> Result<(), String> {
                 .default_value("e"),
         )
         .arg(
+            Arg::with_name("halflife")
+                .short("f")
+                .long("halflife")
+                .value_name("SECONDS")
+                .help("The time in seconds for the dissonance to drop by half\n")
+                .next_line_help(true)
+                .default_value("1.0")
+                .validator(|s| match s.parse::<f32>() {
+                    Ok(f) => {
+                        if f >= 0.0 && f <= 100.0 {
+                            Ok(())
+                        } else {
+                            Err("Argument out of range: (0 .. 100)".to_owned())
+                        }
+                    }
+                    Err(_) => Err("Argument is not a float".to_owned()),
+                }),
+        )
+        .arg(
             Arg::with_name("discard")
                 .short("d")
                 .long("discard")
@@ -131,6 +150,13 @@ fn main() -> Result<(), String> {
         .parse::<u32>()
         .unwrap();
 
+    // Get the dissonance half-life
+    let halflife = matches
+        .value_of("halflife")
+        .unwrap()
+        .parse::<f32>()
+        .unwrap();
+
     // The channel to get data from audio callback and back
     let (audio_sender, audio_receiver) = channel::<Vec<f32>>();
     let (score_sender, score_receiver) = channel::<Scores>();
@@ -162,16 +188,22 @@ fn main() -> Result<(), String> {
         received_spec = Some(spec);
         Recorder { audio_sender }
     })?;
-    let freq = received_spec.unwrap().freq;
+    let frequency = received_spec.unwrap().freq;
 
     capture_device.resume();
 
     // Build audio receiver and aggrgator
     let buffer = AudioBuffer::new(audio_receiver, buf_opt);
 
+    let scoring_options = fourier::ScoringOptions {
+        frequency,
+        zpadding,
+        halflife,
+    };
+
     // Start the data analysis
     std::thread::spawn(move || {
-        fourier::fourier_thread(buffer, score_sender, freq, zpadding);
+        fourier::fourier_thread(buffer, score_sender, scoring_options);
     });
 
     if matches.is_present("terminal") {

@@ -37,10 +37,10 @@ impl ScoreCalculator {
         score
     }
 
-    pub fn calculate(&mut self, heard: Vec<Frequency>) -> Scores {
+    pub fn calculate(&mut self, heard: Vec<Frequency>, halflife:f32) -> Scores {
         let mut notes = [0f32; NOTE_COUNT];
 
-        // Extrac indices for lookup table
+        // Extract indices for lookup table
         // Sort the array
         // Possibly skip lower parts for noise reduction
         let heard_sorted = heard
@@ -62,8 +62,8 @@ impl ScoreCalculator {
         let seconds = time_since_last_call.as_secs() as f32
             + time_since_last_call.subsec_nanos() as f32 * 1e-9;
         self.time = Instant::now();
-        // Get how much previous score should have faded (-30% per second)
-        let factor = 0.7f32.powf(seconds);
+        // Get how much previous score should have faded
+        let factor = 0.5f32.powf(seconds / halflife);
         // Apply to each score
         for note in Note::iter() {
             let score = self.calculate_note(heard_sorted.as_slice(), note);

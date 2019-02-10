@@ -14,8 +14,19 @@ use crate::audio_buffer::AudioBuffer;
 use crate::frequency::Frequency;
 use crate::scores::{ScoreCalculator, Scores};
 
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ScoringOptions {
+    // The frequency of the audio input
+    pub frequency: i32,
+    // If the data should be padded for more precision
+    pub zpadding: u32,
+    // The time for the perceived dissonance to drop by half
+    pub halflife: f32,
+}
+
 // Receives audio input, start FFT on most recent data and send results
-pub fn fourier_thread(buffer: AudioBuffer, sender: Sender<Scores>, freq: i32, zpadding: u32) {
+pub fn fourier_thread(buffer: AudioBuffer, sender: Sender<Scores>, options:ScoringOptions) {
     // The FFT pool, allows for optimized yet flexible data sizes
     let mut planner = FFTplanner::<f32>::new(false);
     // The audio buffer, to get uniformly-sized audio packets
@@ -25,7 +36,7 @@ pub fn fourier_thread(buffer: AudioBuffer, sender: Sender<Scores>, freq: i32, zp
     // Get the first first few seconds of recording
     let vec = buffer.take().unwrap();
     // Extract frequencies to serve as mask
-    let fourier = fourier_analysis(&vec[..], &mut planner, freq, None, zpadding);
+    let fourier = fourier_analysis(&vec[..], &mut planner, None, options);
     let mask = Some(fourier.as_slice());
     // Create a dissonance calculator from the frequencies
     let mut calculator = ScoreCalculator::new(fourier.as_slice());
@@ -35,9 +46,9 @@ pub fn fourier_thread(buffer: AudioBuffer, sender: Sender<Scores>, freq: i32, zp
     // While audio buffer can still output data
     while let Some(vec) = buffer.take() {
         // Apply fft and extract frequencies
-        let fourier = fourier_analysis(&vec[..], &mut planner, freq, mask, zpadding);
+        let fourier = fourier_analysis(&vec[..], &mut planner, mask, options);
         // Calculate dissonance of each note
-        let scores = calculator.calculate(fourier);
+        let scores = calculator.calculate(fourier, options.halflife);
         // Send
         sender.send(scores).ok();
     }
@@ -46,12 +57,12 @@ pub fn fourier_thread(buffer: AudioBuffer, sender: Sender<Scores>, freq: i32, zp
 fn fourier_analysis(
     vec: &[f32],
     planner: &mut FFTplanner<f32>,
-    freq: i32,
     mask: Option<&[Frequency]>,
-    zpadding: u32,
+    options: ScoringOptions,
 ) -> Vec<Frequency> {
-    // Setup fft parameters
-    let len = vec.len() * zpadding as usize;
+
+    // Setup fft parameters, possibly padding the input array
+    let len = vec.len() * options.zpadding as usize;
     let mut fft_in = vec
         .iter()
         .map(|&f| Complex { re: f, im: 0f32 })
@@ -73,9 +84,9 @@ fn fourier_analysis(
         .map(|(i, c)| {
             // Calculate intensity
             // FACTOR A norm_sqr vs sqr ?
-            let mut intensity = c.norm_sqr(); // (*a * *a + c.im * c.im).sqrt();
-                                              // Calculate frequency
-            let frequency = i as f32 * freq as f32 / len as f32;
+            let mut intensity = c.norm_sqr();
+            // Calculate frequency
+            let frequency = i as f32 / len as f32 * options.frequency as f32;
             // Noise masking, currently unused
             if let Some(vec) = mask {
                 if intensity > vec[i - 1].intensity {

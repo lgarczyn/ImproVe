@@ -34,7 +34,6 @@ If experiencing lag, consider `cargo run --release` and `cargo run -- -o`
 ### Features
 
 * Audio feedback mode ?
-* Change the dissonance half-life
 * Change parameters at runtime
 * Other displays than guitar
 * Better smoothing of dissonance curve over octaves
