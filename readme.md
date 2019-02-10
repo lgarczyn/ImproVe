@@ -36,11 +36,6 @@ Run with `cargo run`, help with `cargo run -- -h`
 * Change key parameters at runtime
 * other displays than guitar
 * Better smoothing of dissonance curve over octaves
-* Note graph adjusting to max amplitude not current amplitude
+* Note graph indicate value not just diff to other values
 * Changing the ratio of discarded frequencies
 * Chord display
-
-### Code
-
-* use Clippy to clean bad practice
-* apply fmt more rigorously

@@ -15,22 +15,21 @@ pub struct Scores {
 pub struct ScoreCalculator {
     dissonance_values: Vec<Vec<f32>>,
     prev_score: [f32; NOTE_COUNT],
-    time: Instant
+    time: Instant,
 }
 
 impl ScoreCalculator {
-    pub fn new(heard:&[Frequency]) -> ScoreCalculator {
-
+    pub fn new(heard: &[Frequency]) -> ScoreCalculator {
         let dissonance_values = dissonance::dissonance_scores(heard);
-        
+
         ScoreCalculator {
             dissonance_values,
             prev_score: [0f32; NOTE_COUNT],
-            time: Instant::now()
-        } 
+            time: Instant::now(),
+        }
     }
 
-    pub fn calculate_note(&self, heard:&[(usize, Frequency)], note:Note) -> f32 {
+    pub fn calculate_note(&self, heard: &[(usize, Frequency)], note: Note) -> f32 {
         let mut score = 0f32;
         for &(u, f) in heard.iter() {
             score += f.intensity * self.dissonance_values[note as usize][u];
@@ -38,13 +37,14 @@ impl ScoreCalculator {
         score
     }
 
-    pub fn calculate(&mut self, heard:Vec<Frequency>) -> Scores {
+    pub fn calculate(&mut self, heard: Vec<Frequency>) -> Scores {
         let mut notes = [0f32; NOTE_COUNT];
 
         // Extrac indices for lookup table
         // Sort the array
         // Possibly skip lower parts for noise reduction
-        let heard_sorted = heard.iter()
+        let heard_sorted = heard
+            .iter()
             .cloned()
             .enumerate()
             .sorted_by_key(|(_, f)| *f)
@@ -59,14 +59,16 @@ impl ScoreCalculator {
 
         // Get time since last call
         let time_since_last_call = self.time.elapsed();
-        let seconds = time_since_last_call.as_secs() as f32 + time_since_last_call.subsec_nanos() as f32 * 1e-9;
+        let seconds = time_since_last_call.as_secs() as f32
+            + time_since_last_call.subsec_nanos() as f32 * 1e-9;
         self.time = Instant::now();
         // Get how much previous score should have faded (-30% per second)
         let factor = 0.7f32.powf(seconds);
         // Apply to each score
         for note in Note::iter() {
             let score = self.calculate_note(heard_sorted.as_slice(), note);
-            notes[note as usize] = score * (1f32 - factor) + self.prev_score[note as usize] * factor;
+            notes[note as usize] =
+                score * (1f32 - factor) + self.prev_score[note as usize] * factor;
         }
 
         self.prev_score = notes;
@@ -102,9 +104,12 @@ impl ScoreCalculator {
         // let mut average = notes[0];
         // for score in notes.iter_mut() {
         //     average = average * 0.7f32 + *score * 0.3f32;
-        //     *score -= average; 
+        //     *score -= average;
         // }
 
-        Scores{notes, fourier:heard}
+        Scores {
+            notes,
+            fourier: heard,
+        }
     }
 }
