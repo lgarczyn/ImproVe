@@ -14,7 +14,8 @@ Currently, it gives you a somewhat accurate fretboard-looking suggestion thing.
 
 Because the analysis is (ideally) objective, by estimating sound roughness, the suggestions do not take into account any cultural parts of perceived consonance and dissonance. This could potentially help a musician to break out of habits and explore music outside of trained norms.
 
-On the other hand, because the analysis is still a couple levels of abstractions removed from the actual perception of dissonance, and cannot currently estimate "second-order beatings", or the dissonance caused by notes played before the current sample, a lot of information is lost, and up to the composer to estimate, by instinct or traditional music theory.
+On the other hand, because the analysis is still a couple levels of abstractions removed from the actual perception of dissonance,
+a lot of information is lost, and up to the composer to estimate, by instinct or traditional music theory.
 
 ## Requirements
 
@@ -26,16 +27,24 @@ You also need cargo, but that's a bit of a given for any rust project.
 
 Run with `cargo run`, help with `cargo run -- -h`
 
+If experiencing lag, consider `cargo run --release` and `cargo run -- -o`
+
 ## To Do
 
 ### Features
 
 * Audio feedback mode ?
-* Use a sample of the targeted instrument
 * Change the dissonance half-life
-* Change key parameters at runtime
-* other displays than guitar
+* Change parameters at runtime
+* Other displays than guitar
 * Better smoothing of dissonance curve over octaves
-* Note graph indicate value not just diff to other values
+* Make the note graph indicate value not just diff to other values
 * Changing the ratio of discarded frequencies
 * Chord display
+* Put back dissonance exp lookup table to accelerate load time
+
+### Output quality
+
+* Use actual sample of the targeted instrument
+* Use a more scientific secondary beatings estimate (dissonance over time)
+* Option for a music theory approach instead of the current formula

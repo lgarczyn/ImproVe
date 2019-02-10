@@ -88,13 +88,32 @@ impl ScoreCalculator {
         // Octave rescaling
         // Moves every scale to the same range (0 .. 1)
         // Creates inconsistencies between octaves, but OK compromise
+        
+        // Normalise octaves
+        for i in 0 .. notes.len() {
 
+            let octave_pos = i % 12;
+            // Get index of first and last note of octave (ie. C2 and C3)
+            let prev_c = i - octave_pos;
+            let next_c = prev_c + 12;
+
+            if next_c < notes.len() {
+
+                // Get diff between the scores
+                let amp = notes[prev_c] - notes[next_c];
+                // Normalize lineraly
+                notes[i] = notes[i] + amp * octave_pos as f32 / 12.0;
+            }
+        }
+
+        // Extract the range of each octave
         let mut minmax = [(0f32, 0f32); NOTE_COUNT / 12 + 1];
 
         for (i, it) in notes.iter().chunks(12).into_iter().enumerate() {
             minmax[i] = it.cloned().minmax().into_option().unwrap();
         }
 
+        // Move each octave to the 0.0 .. 1.0 range
         for (i, score) in notes.iter_mut().enumerate() {
             let (min, max) = minmax[i / 12];
             *score = (*score - min) / (max - min);

@@ -96,7 +96,7 @@ fn main() -> Result<(), String> {
             Arg::with_name("noclear")
                 .short("c")
                 .long("noclear")
-                .help("Prevents the program from attempting to clear the terminal\n"),
+                .help("Prevents the program from using termios\n"),
         )
         .get_matches();
     // Get notation convention
