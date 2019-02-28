@@ -27,7 +27,7 @@ You also need cargo, but that's a bit of a given for any rust project.
 
 Run with `cargo run`, help with `cargo run -- -h`
 
-If experiencing lag, consider `cargo run --release` and `cargo run -- -o`
+If experiencing lag, consider `cargo run --release` and the `-o` option, which allows the program to 'skip' audio data.
 
 ## To Do
 
