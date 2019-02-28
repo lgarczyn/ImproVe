@@ -181,40 +181,51 @@ fn draw_board(
         )
         .unwrap();
 
-    let (min, max) = scores.notes[FIRST_NOTE..LAST_NOTE]
-        .iter()
-        .minmax()
-        .into_option()
-        .unwrap();
+    let note_scores = normalize(&scores.note_scores[FIRST_NOTE..LAST_NOTE]);
+    let note_values = normalize(&scores.note_values[FIRST_NOTE..LAST_NOTE]);
 
-    let gradient_a = Hsv::new(120.0, 1.0, 1.0);
-    let gradient_b = Hsv::new(0.0, 1.0, 1.0);
-    let gradient = Gradient::new(vec![gradient_a, gradient_b]);
-
+    let gradient_score = {
+        let gradient_a = Hsv::new(120.0, 1.0, 1.0);
+        let gradient_b = Hsv::new(0.0, 1.0, 1.0);
+        Gradient::new(vec![gradient_a, gradient_b])
+    };
     // The canvas position
     let mut pnt = Point::new(0, 0);
-
+    // Skip first line
     pnt = pnt.offset(0, STRING_HEIGHT as i32);
 
     // For every guitar strings
     for &j in STRINGS.iter().rev() {
         // For every note on that string
         for i in j..j + FRET_COUNT as usize {
+            // Write the name with the appropriate color
+
             // Get note name and calculated score
             let texture = &texture_notes[i % 12];
-            let score = scores.notes[i];
-            // Write the name with the appropriate color
-            // Get the score in the appropriate range
-            let score = (score - min) / (max - min);
+            let score = note_scores[i - FIRST_NOTE];
             // Get the colored rectangle coordinates
             let rect = Rect::new(pnt.x, pnt.y, FRET_WIDTH, STRING_HEIGHT);
             // Get the gradient color
-            let gradient_poll = gradient.get(score);
+            let gradient_poll = gradient_score.get(score);
             let color: (u8, u8, u8) = Srgb::from(gradient_poll).into_format().into_components();
             // Draw tesxt and color to canvas
             canvas.set_draw_color(Color::from(color));
             canvas.fill_rect(rect).unwrap();
             canvas.copy(texture, None, Some(rect)).unwrap();
+            
+            // Underline notes being played (depending on value)
+            
+            // Get note value
+            let value = note_values[i - FIRST_NOTE];
+            // Get the colored rectangle coordinates
+            let rect = Rect::new(pnt.x, pnt.y + STRING_HEIGHT as i32 - 1, FRET_WIDTH, 1);
+            // Get the gradient color
+            let color = (value * 255f32) as u8;
+            let color: (u8, u8, u8) = (color, color, color);
+            // Draw tesxt and color to canvas
+            canvas.set_draw_color(Color::from(color));
+            canvas.fill_rect(rect).unwrap();
+
             // Add the bar to differentiate the zero 'fret' from the rest
             if i == j {
                 pnt = pnt.offset(FRET_LINE as i32, 0);
@@ -258,6 +269,17 @@ where
             T::from(into.start).unwrap()
         }
     }
+}
+
+fn normalize(data:&[f32]) -> Vec<f32> {
+    let (min, max) = data
+        .iter()
+        .cloned()
+        .minmax()
+        .into_option()
+        .unwrap();
+
+    data.iter().map(|&f| (f - min) / (max - min)).collect_vec()
 }
 
 fn draw_graph(canvas: &mut Canvas<Window>, scores: &Scores) {
@@ -371,13 +393,13 @@ pub fn draw_pure_dissonance_graph(canvas: &mut Canvas<Window>, _: &Scores) {
 
 #[allow(dead_code)]
 pub fn draw_notes(canvas: &mut Canvas<Window>, scores: &Scores) {
-    let (min, max) = scores.notes.iter().cloned().minmax().into_option().unwrap();
+    let (min, max) = scores.note_scores.iter().cloned().minmax().into_option().unwrap();
 
     let points = (0..FOURIER_WIDTH)
         .map(|x| {
-            let i = map(x, 0..FOURIER_WIDTH, 0..scores.notes.len() - 1, false);
+            let i = map(x, 0..FOURIER_WIDTH, 0..scores.note_scores.len() - 1, false);
             let y = map(
-                scores.notes[i],
+                scores.note_scores[i],
                 min..max,
                 0..FOURIER_HEIGHT as i32 - 1,
                 true,

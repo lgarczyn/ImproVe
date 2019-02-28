@@ -47,3 +47,11 @@ If experiencing lag, consider `cargo run --release` and the `-o` option, which a
 * Use actual sample of the targeted instrument
 * Use a more scientific secondary beatings estimate (dissonance over time)
 * Option for a music theory approach instead of the current formula
+
+### Code
+
+* use OCTAVE const for different octave sizes
+* rename Frequency to Component, and Frequency.value to Frequency.component
+* clean the interval to interval "map" template function, to garantee output range
+  * also move it to its own place
+  * maybe as a Trait impl ?

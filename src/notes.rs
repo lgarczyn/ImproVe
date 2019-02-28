@@ -26,6 +26,12 @@ impl Note {
         let half_tones = self as i32 - BASE_NOTE as i32;
         BASE_FREQUENCY * 2f32.powf(half_tones as f32 / 12f32)
     }
+    pub fn from_freq(f:f32) -> Option<Note> {
+        let pos = (f / BASE_FREQUENCY).log2() * 12f32;
+        let index = pos.round() as i32 + BASE_NOTE as i32;
+        let index = index as usize;
+        Note::iter().skip(index).next()
+    }
     pub fn iter() -> <Note as IntoEnumIterator>::Iterator {
         Note::into_enum_iter()
     }

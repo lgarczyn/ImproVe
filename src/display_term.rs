@@ -69,7 +69,7 @@ fn guitar(scores: &[f32; NOTE_COUNT], options: DisplayOptions) {
 // Simply feeds the scores into the guitar display
 pub fn display(receiver: Receiver<Scores>, options: DisplayOptions) -> Result<(), String> {
     for scores in receiver.into_iter() {
-        guitar(&scores.notes, options);
+        guitar(&scores.note_scores, options);
     }
     Ok(())
 }
