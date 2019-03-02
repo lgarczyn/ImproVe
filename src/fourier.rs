@@ -23,6 +23,8 @@ pub struct ScoringOptions {
     pub zpadding: u32,
     // The time for the perceived dissonance to drop by half
     pub halflife: f32,
+    // The time for the perceived frequency to drop by half
+    pub fhalflife: f32,
 }
 
 // Receives audio input, start FFT on most recent data and send results
@@ -48,7 +50,7 @@ pub fn fourier_thread(buffer: AudioBuffer, sender: Sender<Scores>, options:Scori
         // Apply fft and extract frequencies
         let fourier = fourier_analysis(&vec[..], &mut planner, mask, options);
         // Calculate dissonance of each note
-        let scores = calculator.calculate(fourier, options.halflife);
+        let scores = calculator.calculate(fourier, options.halflife, options.fhalflife);
         // Send
         sender.send(scores).ok();
     }

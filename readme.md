@@ -34,6 +34,8 @@ If experiencing lag, consider `cargo run --release` and the `-o` option, which a
 ### Features
 
 * Audio feedback mode ?
+  * Get perfect pitch of the note being played
+  * Get suggested notes (4th, 5th and others)
 * Change parameters at runtime
 * Other displays than guitar
 * Better smoothing of dissonance curve over octaves
@@ -44,6 +46,8 @@ If experiencing lag, consider `cargo run --release` and the `-o` option, which a
 
 ### Output quality
 
+* For some reason playing a C on the A string causes A to show as very dissonant
+  * likely a smoothing problem
 * Use actual sample of the targeted instrument
 * Use a more scientific secondary beatings estimate (dissonance over time)
 * Option for a music theory approach instead of the current formula

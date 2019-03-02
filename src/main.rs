@@ -81,6 +81,25 @@ fn main() -> Result<(), String> {
                 .value_name("SECONDS")
                 .help("The time in seconds for the dissonance to drop by half\n")
                 .next_line_help(true)
+                .default_value("0.0")
+                .validator(|s| match s.parse::<f32>() {
+                    Ok(f) => {
+                        if f >= 0.0 && f <= 100.0 {
+                            Ok(())
+                        } else {
+                            Err("Argument out of range: (0 .. 100)".to_owned())
+                        }
+                    }
+                    Err(_) => Err("Argument is not a float".to_owned()),
+                }),
+        )
+        .arg(
+            Arg::with_name("frequency halflife")
+                .short("g")
+                .long("fhalflife")
+                .value_name("SECONDS")
+                .help("The time in seconds for the heard frequency to drop by half\n")
+                .next_line_help(true)
                 .default_value("1.0")
                 .validator(|s| match s.parse::<f32>() {
                     Ok(f) => {
@@ -157,6 +176,13 @@ fn main() -> Result<(), String> {
         .parse::<f32>()
         .unwrap();
 
+    // Get the frequency half-life
+    let fhalflife = matches
+        .value_of("frequency halflife")
+        .unwrap()
+        .parse::<f32>()
+        .unwrap();
+
     // The channel to get data from audio callback and back
     let (audio_sender, audio_receiver) = channel::<Vec<f32>>();
     let (score_sender, score_receiver) = channel::<Scores>();
@@ -199,6 +225,7 @@ fn main() -> Result<(), String> {
         frequency,
         zpadding,
         halflife,
+        fhalflife,
     };
 
     // Start the data analysis
