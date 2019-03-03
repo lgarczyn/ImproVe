@@ -47,6 +47,7 @@ If experiencing lag, consider `cargo run --release` and the `-o` option, which a
 * Use actual sample of the targeted instrument
 * Use a more scientific secondary beatings estimate (dissonance over time)
 * Option for a music theory approach instead of the current formula
+* Remove masking unless it shows to actually be working
 
 ### Code
 
@@ -55,3 +56,4 @@ If experiencing lag, consider `cargo run --release` and the `-o` option, which a
 * clean the interval to interval "map" template function, to garantee output range
   * also move it to its own place
   * maybe as a Trait impl ?
+* rename fourier_thread to scoring_thread or similar

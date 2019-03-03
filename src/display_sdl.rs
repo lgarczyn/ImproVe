@@ -218,7 +218,7 @@ fn draw_board(
             // Get note value
             let value = note_values[i - FIRST_NOTE];
             // Get the colored rectangle coordinates
-            let rect = Rect::new(pnt.x, pnt.y + STRING_HEIGHT as i32 - 1, FRET_WIDTH, 1);
+            let rect = Rect::new(pnt.x, pnt.y + STRING_HEIGHT as i32 - 3, FRET_WIDTH, 3);
             // Get the gradient color
             let color = (value * 255f32) as u8;
             let color: (u8, u8, u8) = (color, color, color);
@@ -271,13 +271,15 @@ where
     }
 }
 
+fn minmax<'a, I>(i: I) -> (f32, f32)
+where
+    I : std::iter::IntoIterator<Item = &'a f32>
+{
+    i.into_iter().cloned().minmax().into_option().unwrap()
+}
+
 fn normalize(data:&[f32]) -> Vec<f32> {
-    let (min, max) = data
-        .iter()
-        .cloned()
-        .minmax()
-        .into_option()
-        .unwrap();
+    let (min, max) = minmax(data);
 
     data.iter().map(|&f| (f - min) / (max - min)).collect_vec()
 }
@@ -393,13 +395,16 @@ pub fn draw_pure_dissonance_graph(canvas: &mut Canvas<Window>, _: &Scores) {
 
 #[allow(dead_code)]
 pub fn draw_notes(canvas: &mut Canvas<Window>, scores: &Scores) {
-    let (min, max) = scores.note_scores.iter().cloned().minmax().into_option().unwrap();
+    let mut notes = scores.note_scores.to_vec();
+    notes.truncate(crate::notes::NOTE_COUNT - 12);
+
+    let (min, max) = minmax(&notes);
 
     let points = (0..FOURIER_WIDTH)
         .map(|x| {
-            let i = map(x, 0..FOURIER_WIDTH, 0..scores.note_scores.len() - 1, false);
+            let i = map(x, 0..FOURIER_WIDTH, 0..notes.len() - 1, false);
             let y = map(
-                scores.note_scores[i],
+                notes[i],
                 min..max,
                 0..FOURIER_HEIGHT as i32 - 1,
                 true,
@@ -411,4 +416,27 @@ pub fn draw_notes(canvas: &mut Canvas<Window>, scores: &Scores) {
     canvas.set_draw_color(Color::RGB(255, 255, 255));
 
     canvas.draw_lines(points.as_slice()).unwrap();
+
+    let mut notes = scores.note_values.to_vec();
+    notes.truncate(crate::notes::NOTE_COUNT - 12);
+
+    let (min, max) = minmax(&notes);
+
+    let points = (0..FOURIER_WIDTH)
+        .map(|x| {
+            let i = map(x, 0..FOURIER_WIDTH, 0..notes.len() - 1, false);
+            let y = map(
+                notes[i],
+                min..max,
+                0..FOURIER_HEIGHT as i32 - 1,
+                true,
+            );
+            Point::new(x as i32, y)
+        })
+        .collect_vec();
+
+    canvas.set_draw_color(Color::RGB(255, 0, 0));
+
+    canvas.draw_lines(points.as_slice()).unwrap();
+
 }
