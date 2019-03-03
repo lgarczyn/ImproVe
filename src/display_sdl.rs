@@ -211,6 +211,7 @@ fn draw_board(
             // Draw tesxt and color to canvas
             canvas.set_draw_color(Color::from(color));
             canvas.fill_rect(rect).unwrap();
+            let rect = Rect::new(pnt.x, pnt.y - 1, FRET_WIDTH, STRING_HEIGHT);
             canvas.copy(texture, None, Some(rect)).unwrap();
             
             // Underline notes being played (depending on value)
