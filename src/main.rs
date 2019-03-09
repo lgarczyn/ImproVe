@@ -17,6 +17,7 @@ mod fourier;
 mod frequency;
 mod notes;
 mod scores;
+mod tools;
 
 use self::audio_buffer::{AudioBuffer, BufferOptions};
 use self::display::DisplayOptions;
