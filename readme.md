@@ -53,7 +53,5 @@ If experiencing lag, consider `cargo run --release` and the `-o` option, which a
 
 * use OCTAVE const for different octave sizes
 * rename Frequency to Component, and Frequency.value to Component.frequency
-* clean the interval to interval "map" template function, to garantee output range
-  * also move it to its own place
-  * maybe as a Trait impl ?
 * rename fourier_thread to scoring_thread or similar
+  * use ThreadBuilder::name

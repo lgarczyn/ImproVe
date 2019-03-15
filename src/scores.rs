@@ -114,9 +114,7 @@ impl ScoreCalculator {
         for f in heard {
             if let Some(note) = Note::from_freq(f.value) {
                 let index = note as usize;
-                //note_values[index] += f.intensity.sqrt();
-                note_values[index] =
-                f.intensity.sqrt() * (1f32 - factor) + self.prev_values[note as usize] * factor;
+                note_values[index] = f.intensity.sqrt() * (1f32 - factor) + self.prev_values[note as usize] * factor;
             }
         }
         self.prev_values = note_values;
@@ -136,8 +134,10 @@ impl ScoreCalculator {
         let seconds = time_since_last_call.as_secs() as f32
             + time_since_last_call.subsec_nanos() as f32 * 1e-9;
         self.time = Instant::now();
+        assert!(seconds >= 0f32);
         // Get how much previous score should have faded
         let factor = 0.5f32.powf(seconds / halflife);
+        assert!(factor >= 0f32 && factor <= 1f32);
 
         Scores {
             note_scores: self.calculate_scores(&heard, factor),

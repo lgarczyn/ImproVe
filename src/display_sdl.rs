@@ -25,6 +25,7 @@ use sdl2::Sdl;
 use crate::display::DisplayOptions;
 use crate::notes::Note::*;
 use crate::scores::Scores;
+use crate::tools::*;
 
 // Guitar constants
 
@@ -181,8 +182,10 @@ fn draw_board(
         )
         .unwrap();
 
-    let note_scores = normalize(&scores.note_scores[FIRST_NOTE..LAST_NOTE]);
-    let note_values = normalize(&scores.note_values[FIRST_NOTE..LAST_NOTE]);
+    let mut note_scores = scores.note_scores[FIRST_NOTE..LAST_NOTE].to_owned();
+    note_scores.normalize();
+    let mut note_values = scores.note_values[FIRST_NOTE..LAST_NOTE].to_owned();
+    note_values.normalize();
 
     let gradient_score = {
         let gradient_a = Hsv::new(120.0, 1.0, 1.0);
@@ -236,53 +239,6 @@ fn draw_board(
         pnt = Point::new(0, pnt.y() + STRING_HEIGHT as i32);
     }
     canvas.present();
-}
-
-use num_traits::cast::{NumCast, ToPrimitive};
-use std::fmt::Debug;
-use std::ops::Range;
-
-// Map any numerical type from one range to another
-// Doesn't actually guarantee the ranges will stay exclusive
-// So use with care
-fn map<F, T>(f: F, from: Range<F>, into: Range<T>, inv: bool) -> T
-where
-    F: ToPrimitive + Debug,
-    T: ToPrimitive + NumCast + Debug,
-{
-    let fromf: Range<f64> = from.start.to_f64().unwrap()..from.end.to_f64().unwrap();
-    let intof: Range<f64> = into.start.to_f64().unwrap()..into.end.to_f64().unwrap();
-    let ff: f64 = f.to_f64().unwrap();
-
-    let amplitude = (fromf.end - fromf.start) + std::f64::MIN_POSITIVE;
-    let ratio = (ff - fromf.start) / amplitude;
-    let mapped = ratio * (intof.end - intof.start);
-
-    let mapped = if inv {
-        intof.end - mapped
-    } else {
-        intof.start + mapped
-    };
-    match T::from(mapped.round()) {
-        Some(mapped) => mapped,
-        None => {
-            eprintln!("could not cast {:?} from {:?} to {:?}", f, from, into);
-            T::from(into.start).unwrap()
-        }
-    }
-}
-
-fn minmax<'a, I>(i: I) -> (f32, f32)
-where
-    I : std::iter::IntoIterator<Item = &'a f32>
-{
-    i.into_iter().cloned().minmax().into_option().unwrap()
-}
-
-fn normalize(data:&[f32]) -> Vec<f32> {
-    let (min, max) = minmax(data);
-
-    data.iter().map(|&f| (f - min) / (max - min)).collect_vec()
 }
 
 fn draw_graph(canvas: &mut Canvas<Window>, scores: &Scores) {
@@ -345,12 +301,12 @@ fn draw_fourier(canvas: &mut Canvas<Window>, scores: &Scores) {
         .iter()
         .map(|f| {
             Point::new(
-                map(f.value, min_hz..max_hz, 0..FOURIER_WIDTH as i32 - 1, false),
-                map(
-                    f.intensity,
-                    0f32..max_vo,
-                    0..FOURIER_HEIGHT as i32 - 1,
-                    true,
+                f.value.map_interval(
+                    min_hz ..= max_hz,
+                    0 ..= FOURIER_WIDTH as i32 - 1),
+                f.intensity.map_interval_rev(
+                    0f32 ..= max_vo,
+                    0 ..= FOURIER_HEIGHT as i32 - 1,
                 ),
             )
         })
@@ -398,17 +354,14 @@ pub fn draw_pure_dissonance_graph(canvas: &mut Canvas<Window>, _: &Scores) {
 pub fn draw_notes(canvas: &mut Canvas<Window>, scores: &Scores) {
     let mut notes = scores.note_scores.to_vec();
     notes.truncate(crate::notes::NOTE_COUNT - 12);
-
-    let (min, max) = minmax(&notes);
+    notes.normalize();
 
     let points = (0..FOURIER_WIDTH)
         .map(|x| {
-            let i = map(x, 0..FOURIER_WIDTH, 0..notes.len() - 1, false);
-            let y = map(
-                notes[i],
-                min..max,
-                0..FOURIER_HEIGHT as i32 - 1,
-                true,
+            let i = x.map_interval(0..=FOURIER_WIDTH-1, 0..=notes.len() - 1);
+            let y = notes[i].map_interval_rev(
+                0f32 ..= 1f32,
+                0 ..= FOURIER_HEIGHT as i32 - 1,
             );
             Point::new(x as i32, y)
         })
@@ -420,17 +373,14 @@ pub fn draw_notes(canvas: &mut Canvas<Window>, scores: &Scores) {
 
     let mut notes = scores.note_values.to_vec();
     notes.truncate(crate::notes::NOTE_COUNT - 12);
-
-    let (min, max) = minmax(&notes);
+    notes.normalize();
 
     let points = (0..FOURIER_WIDTH)
         .map(|x| {
-            let i = map(x, 0..FOURIER_WIDTH, 0..notes.len() - 1, false);
-            let y = map(
-                notes[i],
-                min..max,
-                0..FOURIER_HEIGHT as i32 - 1,
-                true,
+            let i = x.map_interval(0 ..= FOURIER_WIDTH-1, 0 ..= notes.len() - 1);
+            let y = notes[i].map_interval_rev(
+                0f32 ..= 1f32,
+                0 ..= FOURIER_HEIGHT as i32 - 1,
             );
             Point::new(x as i32, y)
         })
