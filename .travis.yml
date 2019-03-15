@@ -51,8 +51,8 @@ matrix:
     # OSX
     #- env: TARGET=i686-apple-darwin
     #  os: osx
-    - env: TARGET=x86_64-apple-darwin
-      os: osx
+    #- env: TARGET=x86_64-apple-darwin
+    #  os: osx
 
     # *BSD
     #- env: TARGET=i686-unknown-freebsd DISABLE_TESTS=1
@@ -73,12 +73,23 @@ matrix:
     # Testing other channels
     - env: TARGET=x86_64-unknown-linux-gnu
       rust: nightly
-    - env: TARGET=x86_64-apple-darwin
-      os: osx
-      rust: nightly
+    #- env: TARGET=x86_64-apple-darwin
+    #  os: osx
+    #  rust: nightly
 
 before_install:
-  - set -e
+  - sudo apt-get update -qq
+  - sudo apt-get install -qq cppcheck
+  - sudo apt-get install -qq libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev libegl1-mesa-dev libgles2-mesa-dev
+  - export RUSTFLAGS="$RUSTFLAGS -L./usr/local/include/SDL2"
+  #- set -e
+  #- sudo apt-get update
+  #- sudo apt-get install -y libegl1-mesa-dev libgles2-mesa-dev libsdl2-dev libsdl2-ttf-dev
+  - export PATH="/usr/local/bin:$PATH"
+  - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$PATH
+  - echo $PATH
+  - dpkg -L libsdl2-dev
+  - #if [[ "$OSTYPE" == "darwin"* ]] ; then brew install sdl2 sdl2-ttf ; fi
   - rustup self update
 
 install:
@@ -120,7 +131,7 @@ branches:
   only:
     # release tags
     - /^v\d+\.\d+\.\d+.*$/
-    - master
+    - travis-build-attempt
 
 notifications:
   email:
