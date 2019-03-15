@@ -1,5 +1,5 @@
 use crate::dissonance;
-use crate::frequency::Frequency;
+use crate::component::Component;
 
 use crate::notes::{Note, NOTE_COUNT};
 
@@ -12,7 +12,7 @@ pub struct Scores {
     pub note_scores: [f32; NOTE_COUNT],
     // The intensity of each note
     pub note_values: [f32; NOTE_COUNT],
-    pub fourier: Vec<Frequency>,
+    pub fourier: Vec<Component>,
 }
 
 pub struct ScoreCalculator {
@@ -23,7 +23,7 @@ pub struct ScoreCalculator {
 }
 
 impl ScoreCalculator {
-    pub fn new(heard: &[Frequency]) -> ScoreCalculator {
+    pub fn new(heard: &[Component]) -> ScoreCalculator {
         let dissonance_values = dissonance::dissonance_scores(heard);
 
         ScoreCalculator {
@@ -34,7 +34,7 @@ impl ScoreCalculator {
         }
     }
 
-    fn calculate_note(&self, heard: &[(usize, Frequency)], note: Note) -> f32 {
+    fn calculate_note(&self, heard: &[(usize, Component)], note: Note) -> f32 {
         let mut score = 0f32;
         for &(u, f) in heard.iter() {
             score += f.intensity * self.dissonance_values[note as usize][u];
@@ -42,7 +42,7 @@ impl ScoreCalculator {
         score
     }
 
-    fn calculate_scores(&mut self, heard: &Vec<Frequency>, factor:f32) -> [f32; NOTE_COUNT] {
+    fn calculate_scores(&mut self, heard: &Vec<Component>, factor:f32) -> [f32; NOTE_COUNT] {
         let mut notes = [0f32; NOTE_COUNT];
 
         // Extract indices for lookup table
@@ -106,13 +106,13 @@ impl ScoreCalculator {
         notes
     }
 
-    // Assign each frequency to a note, and sum their value
+    // Assign each Component to a note, and sum their value
     // Allows the dsplay of every perceived note
-    fn calculate_values(&mut self, heard: &Vec<Frequency>, factor:f32) -> [f32; NOTE_COUNT] {
+    fn calculate_values(&mut self, heard: &Vec<Component>, factor:f32) -> [f32; NOTE_COUNT] {
         let mut note_values = [0f32; NOTE_COUNT];
 
         for f in heard {
-            if let Some(note) = Note::from_freq(f.value) {
+            if let Some(note) = Note::from_freq(f.frequency) {
                 let index = note as usize;
                 note_values[index] = f.intensity.sqrt() * (1f32 - factor) + self.prev_values[note as usize] * factor;
             }
@@ -122,7 +122,7 @@ impl ScoreCalculator {
     }
 
     // Analyses a list of perceived frequencies, and returns displayable data
-    pub fn calculate(&mut self, heard: Vec<Frequency>, halflife:f32) -> Scores {
+    pub fn calculate(&mut self, heard: Vec<Component>, halflife:f32) -> Scores {
 
         // Time-aware walking average
         // An approximation of second-order beatings

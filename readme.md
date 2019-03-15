@@ -52,6 +52,5 @@ If experiencing lag, consider `cargo run --release` and the `-o` option, which a
 ### Code
 
 * use OCTAVE const for different octave sizes
-* rename Frequency to Component, and Frequency.value to Component.frequency
 * rename fourier_thread to scoring_thread or similar
   * use ThreadBuilder::name

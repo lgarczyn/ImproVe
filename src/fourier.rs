@@ -11,7 +11,7 @@ use rustfft::FFTplanner;
 
 //Crate
 use crate::audio_buffer::AudioBuffer;
-use crate::frequency::Frequency;
+use crate::component::Component;
 use crate::scores::{ScoreCalculator, Scores};
 
 
@@ -57,9 +57,9 @@ pub fn fourier_thread(buffer: AudioBuffer, sender: Sender<Scores>, options:Scori
 fn fourier_analysis(
     vec: &[f32],
     planner: &mut FFTplanner<f32>,
-    mask: Option<&[Frequency]>,
+    mask: Option<&[Component]>,
     options: ScoringOptions,
-) -> Vec<Frequency> {
+) -> Vec<Component> {
 
     // Setup fft parameters, possibly padding the input array
     let len = vec.len() * options.zpadding as usize;
@@ -99,9 +99,9 @@ fn fourier_analysis(
             // FACTOR B a_weighing and how much
             intensity *= a_weigh_frequency(c.re);
             // Build intensity/value couple
-            Frequency {
+            Component {
                 intensity,
-                value: frequency,
+                frequency,
             }
         })
         .collect_vec()

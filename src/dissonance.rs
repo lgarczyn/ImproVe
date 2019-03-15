@@ -10,7 +10,7 @@ Further improvements include a more scientific data source, varying instruments.
 
 */
 
-use crate::frequency::Frequency;
+use crate::component::Component;
 use crate::notes::{Note, NOTE_COUNT};
 use itertools::Itertools;
 use std::f32::consts;
@@ -61,7 +61,7 @@ pub fn dissonance_opt(f_1: f32, s_1: f32, f_2: f32, s_2: f32) -> f32 {
 }
 
 // Returns a 2D array mapping played notes and frequency index to dissonance score
-pub fn dissonance_scores(heard: &[Frequency]) -> Vec<Vec<f32>> {
+pub fn dissonance_scores(heard: &[Component]) -> Vec<Vec<f32>> {
     // Note that the intensity of the 'heard' frequency is ignored here
     // We are only building a table of the scores of those frequencies
 
@@ -73,7 +73,7 @@ pub fn dissonance_scores(heard: &[Frequency]) -> Vec<Vec<f32>> {
         .iter()
         .cloned()
         .map(|f| {
-            let s = D_S / (S1 * f.value + S2);
+            let s = D_S / (S1 * f.frequency + S2);
             (f, s)
         })
         .collect_vec();
@@ -90,7 +90,7 @@ pub fn dissonance_scores(heard: &[Frequency]) -> Vec<Vec<f32>> {
             .iter()
             .cloned()
             .map(|f| {
-                let s = D_S / (S1 * f.value + S2);
+                let s = D_S / (S1 * f.frequency + S2);
                 (f, s)
             })
             .collect_vec();
@@ -103,7 +103,7 @@ pub fn dissonance_scores(heard: &[Frequency]) -> Vec<Vec<f32>> {
             // For every frequency of the note
             for (f_p, s_p) in played_buffered.iter().cloned() {
                 //Calculate dissonance
-                let res = dissonance_opt(f_h.value, s_h, f_p.value, s_p);
+                let res = dissonance_opt(f_h.frequency, s_h, f_p.frequency, s_p);
 
                 // Add the dissonance scores to the heard frequency score
                 heard_score += res * f_p.intensity;
@@ -120,8 +120,8 @@ const HARMONIC_COUNT: usize = 300;
 const FC: usize = HARMONIC_COUNT * 2 + 1;
 
 // Get a simulated instrument's frequency components
-pub fn get_notes_harmonics() -> [[Frequency; FC]; NOTE_COUNT] {
-    let mut array: [[Frequency; FC]; NOTE_COUNT] = [[Frequency::default(); FC]; NOTE_COUNT];
+pub fn get_notes_harmonics() -> [[Component; FC]; NOTE_COUNT] {
+    let mut array: [[Component; FC]; NOTE_COUNT] = [[Component::default(); FC]; NOTE_COUNT];
 
     for note in Note::iter() {
         let f = note.freq();
@@ -142,8 +142,8 @@ pub fn get_notes_harmonics() -> [[Frequency; FC]; NOTE_COUNT] {
                 frequency = f * factor;
                 intensity = 1f32 / factor; //.powf(0.5f32);
             }
-            array[note as usize][i] = Frequency {
-                value: frequency,
+            array[note as usize][i] = Component {
+                frequency,
                 intensity,
             };
         }

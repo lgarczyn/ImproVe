@@ -14,7 +14,7 @@ mod display_sdl;
 mod display_term;
 mod dissonance;
 mod fourier;
-mod frequency;
+mod component;
 mod notes;
 mod scores;
 mod tools;

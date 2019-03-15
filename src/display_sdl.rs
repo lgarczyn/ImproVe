@@ -265,16 +265,16 @@ fn draw_fourier(canvas: &mut Canvas<Window>, scores: &Scores) {
         .skip(30)
         .map(|mut f| {
             // boost large frequencies for prettier graph
-            f.intensity = f.amplitude() * f.value;
+            f.intensity = f.amplitude() * f.frequency;
             // change values to draw on a log scale
-            f.value = f.value.ln();
+            f.frequency = f.frequency.ln();
             f
         })
         .collect_vec();
 
     // Get maximum frequency (alway the same)
-    let min_hz = fourier.first().unwrap().value;
-    let max_hz = fourier.last().unwrap().value;
+    let min_hz = fourier.first().unwrap().frequency;
+    let max_hz = fourier.last().unwrap().frequency;
 
     // Get maximum intensity (varies with time)
     let max_vo = fourier.iter().max().unwrap().intensity;
@@ -284,9 +284,9 @@ fn draw_fourier(canvas: &mut Canvas<Window>, scores: &Scores) {
     //    .iter()
     //    .map(|f| {
     //        // apply reverse correction
-    //        let i = f.intensity / crate::fourier::a_weigh_frequency(f.value.exp());
+    //        let i = f.intensity / crate::fourier::a_weigh_frequency(f.frequency.exp());
     //        Point::new(
-    //            map(f.value, min_hz..max_hz, 0..FOURIER_WIDTH as i32 - 1, false),
+    //            map(f.frequency, min_hz..max_hz, 0..FOURIER_WIDTH as i32 - 1, false),
     //            map(i, 0f32..max_vo, 0..FOURIER_HEIGHT as i32 - 1, true),
     //        )
     //    })
@@ -301,7 +301,7 @@ fn draw_fourier(canvas: &mut Canvas<Window>, scores: &Scores) {
         .iter()
         .map(|f| {
             Point::new(
-                f.value.map_interval(
+                f.frequency.map_interval(
                     min_hz ..= max_hz,
                     0 ..= FOURIER_WIDTH as i32 - 1),
                 f.intensity.map_interval_rev(
