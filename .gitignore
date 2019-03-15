@@ -4,3 +4,4 @@ Cargo.lock
 *.code-workspace
 .DS_Store
 .vscode
+improve.code-workspace
