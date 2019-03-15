@@ -16,4 +16,4 @@ palette = '>=0.4.1'
 
 [dependencies.sdl2]
 version = '0.32.0'
-features = ["ttf"]
+features = ["ttf", "bundled"]
